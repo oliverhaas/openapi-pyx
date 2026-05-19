@@ -1,41 +1,53 @@
 name: Publish to PyPI
 
+# Publishing is disabled for now. To re-enable: delete the no-op stub below and
+# uncomment the original `on:` and `jobs:` blocks.
+
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to publish (e.g., 1.0.0)"
-        required: true
 
 jobs:
-  test:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref }}
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.14
-      - run: uv sync --group dev
-      - run: uv run ruff check
-      - run: uv run ruff format --check
-      - run: uv run pytest -n auto
+      - run: echo "Publishing is disabled. Edit .github/workflows/publish.yml to re-enable."
 
-  publish:
-    needs: [test]
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/openapi-pyx/
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref }}
-      - uses: astral-sh/setup-uv@v7
-      - run: uv python install 3.14
-      - run: uv build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+# on:
+#   push:
+#     tags: ["v*"]
+#   workflow_dispatch:
+#     inputs:
+#       version:
+#         description: "Version to publish (e.g., 1.0.0)"
+#         required: true
+#
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v6
+#         with:
+#           ref: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref }}
+#       - uses: astral-sh/setup-uv@v7
+#       - run: uv python install 3.14
+#       - run: uv sync --group dev
+#       - run: uv run ruff check
+#       - run: uv run ruff format --check
+#       - run: uv run pytest -n auto
+#
+#   publish:
+#     needs: [test]
+#     runs-on: ubuntu-latest
+#     environment:
+#       name: pypi
+#       url: https://pypi.org/project/openapi-pyx/
+#     permissions:
+#       id-token: write
+#     steps:
+#       - uses: actions/checkout@v6
+#         with:
+#           ref: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref }}
+#       - uses: astral-sh/setup-uv@v7
+#       - run: uv python install 3.14
+#       - run: uv build
+#       - uses: pypa/gh-action-pypi-publish@release/v1

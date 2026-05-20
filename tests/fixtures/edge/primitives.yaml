@@ -1,0 +1,14 @@
+openapi: 3.1.0
+info: { title: Primitives, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Atoms:
+      type: object
+      required: [s, i]
+      properties:
+        s: { type: string }
+        i: { type: integer }
+        n: { type: number, format: float }
+        b: { type: boolean }
+        opt_s: { type: [string, "null"] }

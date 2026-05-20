@@ -161,7 +161,7 @@ def _render_tagged_union(u: TaggedUnion) -> str:
 
 
 def _emit_discriminated_union_alias(name: str, u: DiscriminatedUnion) -> TypeAlias:
-    members = ", ".join(f'Annotated[{model_name(ref.name)}, Tag("{tag}")]' for tag, ref in u.mapping.items())
+    members = " | ".join(f'Annotated[{model_name(ref.name)}, Tag("{tag}")]' for tag, ref in u.mapping.items())
     return TypeAlias(
         name=name,
         value=f'Annotated[{members}, Discriminator("{u.property_name}")]',

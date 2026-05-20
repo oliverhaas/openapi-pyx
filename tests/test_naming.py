@@ -1,4 +1,4 @@
-from openapi_pyx.naming import method_name, model_name, module_name, snake_case
+from openapi_pyx.naming import field_name, method_name, model_name, module_name, snake_case
 
 
 def test_snake_case_basic():
@@ -23,3 +23,15 @@ def test_model_name_pascalcase_and_keyword_safe():
 def test_module_name_snake_lower():
     assert module_name("Pets") == "pets"
     assert module_name("PetOwners") == "pet_owners"
+
+
+def test_field_name_preserves_builtins():
+    # `id`, `type`, `format` are builtins but valid as class attribute names.
+    assert field_name("id") == "id"
+    assert field_name("type") == "type"
+    assert field_name("format") == "format"
+
+
+def test_field_name_appends_underscore_for_keywords():
+    assert field_name("class") == "class_"
+    assert field_name("for") == "for_"

@@ -48,3 +48,4 @@ def test_oneof_discriminator_emits_annotated_union():
     assert "Discriminator" in src
     assert "Annotated[" in src
     assert "Dog" in src and "Cat" in src
+    assert " | " in src

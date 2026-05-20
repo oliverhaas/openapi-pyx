@@ -1,5 +1,7 @@
 """Run `ruff` against a directory of emitted Python files."""
 
+from __future__ import annotations
+
 import subprocess
 import sys
 from typing import TYPE_CHECKING

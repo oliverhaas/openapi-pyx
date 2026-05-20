@@ -1,0 +1,1 @@
+"""Code emission layer."""

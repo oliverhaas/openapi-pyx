@@ -70,6 +70,7 @@ include = ["openapi_pyx", "LICENSE", "README.md"]
 target-version = "py314"
 line-length = 120
 fix = true
+extend-exclude = ["tests/fixtures/golden/**"]
 
 [tool.ruff.lint]
 select = ["ALL"]

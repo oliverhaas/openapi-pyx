@@ -6,6 +6,7 @@ import re
 
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 _PYTHON_RESERVED = set(keyword.kwlist) | set(dir(builtins))
+_PYTHON_KEYWORDS = set(keyword.kwlist)
 
 
 def snake_case(name: str) -> str:
@@ -26,6 +27,12 @@ def model_name(name: str) -> str:
     parts = snake_case(name).split("_")
     pascal = "".join(p.capitalize() for p in parts if p)
     return f"{pascal}_" if pascal.lower() in _PYTHON_RESERVED else pascal
+
+
+def field_name(name: str) -> str:
+    """Snake-cased field name (class attribute) — only avoids Python keywords, not builtins."""
+    snake = snake_case(name)
+    return f"{snake}_" if snake in _PYTHON_KEYWORDS else snake
 
 
 def module_name(name: str) -> str:

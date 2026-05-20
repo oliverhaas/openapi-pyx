@@ -182,6 +182,23 @@ def _adapter_name(t: TypeExpr) -> str:
     return f"_Adapter_{safe}"
 
 
-def _render_root_client(_c: RootClient) -> str:
-    # Filled out in Task 13.
-    raise NotImplementedError
+def _render_root_client(c: RootClient) -> str:
+    lines = [
+        f"class {c.name}:",
+    ]
+    if c.docstring:
+        lines.append(f'{INDENT}"""{c.docstring}"""')
+    lines.extend(
+        [
+            f"{INDENT}def __init__(self, base_url: str, *, http: httpx.AsyncClient | None = None) -> None:",
+            f"{INDENT * 2}self._http = http or httpx.AsyncClient(base_url=base_url)",
+            *[f"{INDENT * 2}self.{sc.attr_name} = {sc.cls_name}(self._http)" for sc in c.sub_clients],
+            "",
+            f'{INDENT}async def __aenter__(self) -> "{c.name}":',
+            f"{INDENT * 2}return self",
+            "",
+            f"{INDENT}async def __aexit__(self, *_exc: object) -> None:",
+            f"{INDENT * 2}await self._http.aclose()",
+        ],
+    )
+    return "\n".join(lines)

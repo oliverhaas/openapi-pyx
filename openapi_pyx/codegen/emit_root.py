@@ -1,5 +1,7 @@
 """Emit the top-level Client that wires sub-clients together."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from openapi_pyx.codegen.nodes import Import, ImportFrom, Module, RootClient, SubClientAttr

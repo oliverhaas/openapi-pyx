@@ -1,0 +1,17 @@
+openapi: 3.1.0
+info: { title: OneOf, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Foo:
+      type: object
+      properties:
+        a: { type: string }
+    Bar:
+      type: object
+      properties:
+        b: { type: integer }
+    Either:
+      oneOf:
+        - $ref: "#/components/schemas/Foo"
+        - $ref: "#/components/schemas/Bar"

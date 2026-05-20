@@ -6,14 +6,17 @@ from openapi_pydantic.v3.v3_1 import DataType, Reference, Schema
 
 from openapi_pyx.ir.schema import (
     ArraySchema,
+    DiscriminatedUnion,
     FreeFormSchema,
     NamedSchema,
     NamedSchemaRef,
     ObjectSchema,
     PrimitiveSchema,
     SchemaField,
+    TaggedUnion,
 )
 from openapi_pyx.ir.schema import Schema as IRSchema
+from openapi_pyx.transform.normalizer import compose_allof
 from openapi_pyx.transform.resolver import SchemaIndex  # noqa: TC001
 
 _PRIMITIVE_KINDS = {DataType.STRING, DataType.INTEGER, DataType.NUMBER, DataType.BOOLEAN, DataType.NULL}
@@ -28,9 +31,21 @@ def lower_components(index: SchemaIndex) -> list[NamedSchema]:
     ]
 
 
-def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:
+def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:  # noqa: PLR0911
     if isinstance(schema, Reference):
         return _ref_to_named(schema.ref, index)
+
+    # Collapse allOf so downstream code never sees it.
+    if schema.allOf:
+        schema = compose_allof(schema, index)
+
+    if schema.discriminator and schema.oneOf:
+        return _lower_discriminated_oneof(schema, index)
+
+    if schema.oneOf or schema.anyOf:
+        members = [_lower(m, index) for m in (schema.oneOf or schema.anyOf or ())]
+        nullable, _ = _split_nullable(schema.type)
+        return TaggedUnion(members=members, nullable=nullable)
 
     nullable, types = _split_nullable(schema.type)
 
@@ -47,6 +62,28 @@ def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:
         return PrimitiveSchema(kind=kind.value, format=schema.schema_format, nullable=nullable)
 
     return FreeFormSchema(nullable=nullable)
+
+
+def _lower_discriminated_oneof(schema: Schema, index: SchemaIndex) -> DiscriminatedUnion:
+    disc = schema.discriminator
+    if disc is None or not disc.propertyName:
+        raise ValueError("Discriminated oneOf must have propertyName")
+
+    mapping: dict[str, NamedSchemaRef] = {}
+    if disc.mapping:
+        for tag, ref in disc.mapping.items():
+            if not isinstance(ref, str) or not ref.startswith(_COMPONENT_PREFIX):
+                raise ValueError(f"Discriminator mapping must reference components/schemas: {ref!r}")
+            name = ref.removeprefix(_COMPONENT_PREFIX)
+            mapping[tag] = NamedSchemaRef(name=name, recursive=name in index.recursive_names)
+    else:
+        for branch in schema.oneOf or ():
+            if not isinstance(branch, Reference):
+                raise TypeError("Discriminated oneOf branches must be $refs")
+            name = branch.ref.removeprefix(_COMPONENT_PREFIX)
+            mapping[name] = NamedSchemaRef(name=name, recursive=name in index.recursive_names)
+
+    return DiscriminatedUnion(property_name=disc.propertyName, mapping=mapping)
 
 
 def _lower_object(schema: Schema, index: SchemaIndex, *, nullable: bool) -> ObjectSchema:

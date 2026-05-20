@@ -1,0 +1,26 @@
+openapi: 3.1.0
+info: { title: OneOfDisc, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Dog:
+      type: object
+      required: [kind, bark]
+      properties:
+        kind: { type: string, const: dog }
+        bark: { type: string }
+    Cat:
+      type: object
+      required: [kind, meow]
+      properties:
+        kind: { type: string, const: cat }
+        meow: { type: string }
+    Animal:
+      oneOf:
+        - $ref: "#/components/schemas/Dog"
+        - $ref: "#/components/schemas/Cat"
+      discriminator:
+        propertyName: kind
+        mapping:
+          dog: "#/components/schemas/Dog"
+          cat: "#/components/schemas/Cat"

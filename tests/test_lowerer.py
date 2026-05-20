@@ -1,7 +1,14 @@
 from pathlib import Path
 
 from openapi_pyx.ingest.loader import load_spec
-from openapi_pyx.ir.schema import ArraySchema, ObjectSchema, PrimitiveSchema
+from openapi_pyx.ir.schema import (
+    ArraySchema,
+    DiscriminatedUnion,
+    NamedSchemaRef,
+    ObjectSchema,
+    PrimitiveSchema,
+    TaggedUnion,
+)
 from openapi_pyx.transform.lowerer import lower_components
 from openapi_pyx.transform.resolver import build_schema_index
 
@@ -37,3 +44,37 @@ def test_nullable_array_lowered():
     assert items.nullable is True
     assert isinstance(items.items, PrimitiveSchema)
     assert items.items.kind == "string"
+
+
+def test_allof_composes_required_and_properties():
+    schemas = _lower("allof_compose")
+    named = next(ns for ns in schemas if ns.name == "Named").schema
+    assert isinstance(named, ObjectSchema)
+    fields = {f.name: f for f in named.fields}
+    assert fields["id"].required is True
+    assert fields["name"].required is True
+
+
+def test_oneof_with_discriminator_lowered():
+    schemas = _lower("oneof_discriminator")
+    animal = next(ns for ns in schemas if ns.name == "Animal").schema
+    assert isinstance(animal, DiscriminatedUnion)
+    assert animal.property_name == "kind"
+    assert set(animal.mapping) == {"dog", "cat"}
+    assert all(isinstance(v, NamedSchemaRef) for v in animal.mapping.values())
+
+
+def test_oneof_without_discriminator_is_tagged_union():
+    schemas = _lower("oneof_no_discriminator")
+    either = next(ns for ns in schemas if ns.name == "Either").schema
+    assert isinstance(either, TaggedUnion)
+    expected_members = 2
+    assert len(either.members) == expected_members
+
+
+def test_anyof_is_tagged_union():
+    schemas = _lower("anyof")
+    soi = next(ns for ns in schemas if ns.name == "StringOrInt").schema
+    assert isinstance(soi, TaggedUnion)
+    expected_members = 2
+    assert len(soi.members) == expected_members

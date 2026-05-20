@@ -1,0 +1,17 @@
+openapi: 3.1.0
+info: { title: AllOf, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Base:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
+    Named:
+      allOf:
+        - $ref: "#/components/schemas/Base"
+        - type: object
+          required: [name]
+          properties:
+            name: { type: string }

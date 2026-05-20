@@ -49,6 +49,7 @@ openapi-pyx = "openapi_pyx.cli:app"
 dev = [
   "pre-commit==4.6.0",
   "pytest==9.0.3",
+  "pytest-asyncio==1.3.0",
   "pytest-cov==7.1.0",
   "pytest-xdist==3.8.0",
   "ruff==0.15.13",
@@ -82,6 +83,7 @@ ignore = ["COM812", "D", "E501", "EM", "TRY003"]
   "ARG",
   "F841",
   "FBT",
+  "PLR2004",
   "PT006",
   "PT011",
   "PT013",

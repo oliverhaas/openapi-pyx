@@ -83,9 +83,11 @@ def _emit_method(op: Operation) -> AsyncMethod:
             header_params.append((p.name, local))
 
     body_param: str | None = None
+    body_required = True  # Default True; only relevant when body_param is set
     if op.request_body is not None:
-        body_type = _render_param_type(op.request_body.schema, optional=not op.request_body.required)
-        body_default = None if op.request_body.required else "None"
+        body_required = op.request_body.required
+        body_type = _render_param_type(op.request_body.schema, optional=not body_required)
+        body_default = None if body_required else "None"
         sig_params.append(Param("body", TypeExpr(body_type), default=body_default, keyword_only=True))
         body_param = "body"
 
@@ -106,6 +108,7 @@ def _emit_method(op: Operation) -> AsyncMethod:
         path_params=path_params,
         header_params=header_params,
         body_param=body_param,
+        body_required=body_required,
         response_type=response_type,
         docstring=op.summary,
     )

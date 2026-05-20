@@ -148,16 +148,26 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
             lines.append(f'{indent}headers = {{"Content-Type": "application/json"}}')
             have_headers = True
 
-    call_args = [url_expr]
+    # Build the call. If body is optional, the content= arg is conditional.
+    base_args = [url_expr]
     if m.query_params:
-        call_args.append("params=params")
+        base_args.append("params=params")
     if have_headers:
-        call_args.append("headers=headers")
-    if m.body_param:
-        call_args.append(
-            f"content={m.body_param}.model_dump_json(by_alias=True, exclude_none=True)",
-        )
-    lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(call_args)})")
+        base_args.append("headers=headers")
+
+    if m.body_param and not m.body_required:
+        # Emit a conditional based on whether body was provided.
+        lines.append(f"{indent}if {m.body_param} is not None:")
+        with_body = [*base_args, f"content={m.body_param}.model_dump_json(by_alias=True, exclude_none=True)"]
+        lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(with_body)})")
+        lines.append(f"{indent}else:")
+        lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(base_args)})")
+    elif m.body_param:
+        full_args = [*base_args, f"content={m.body_param}.model_dump_json(by_alias=True, exclude_none=True)"]
+        lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(full_args)})")
+    else:
+        lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(base_args)})")
+
     lines.append(f"{indent}resp.raise_for_status()")
 
     if m.response_type is not None:

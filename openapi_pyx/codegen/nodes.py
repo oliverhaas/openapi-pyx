@@ -74,6 +74,7 @@ class AsyncMethod:
     path_params: list[tuple[str, str]]  # (template placeholder, python local name)
     header_params: list[tuple[str, str]]
     body_param: str | None  # python local name of the body parameter (or None)
+    body_required: bool  # whether body is required (always True if body_param is None)
     response_type: TypeExpr | None  # type used to construct a `TypeAdapter` and validate
     docstring: str | None = None
 

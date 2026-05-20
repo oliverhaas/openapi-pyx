@@ -54,3 +54,18 @@ def test_emits_typeadapter_for_response_models():
     src = _emit_pets_client()
     assert "TypeAdapter" in src
     assert ".validate_json(resp.content)" in src
+
+
+def test_optional_body_emits_runtime_conditional():
+    spec = load_spec(FIXTURES / "edge" / "optional_body.yaml")
+    index = build_schema_index(spec)
+    schemas = lower_components(index)
+    doc = build_document(spec, index, schemas)
+    group = next(t for t in doc.tags if t.name == "pets")
+    src = render_module(emit_client_module(group))
+    # The body parameter is Optional (defaults to None)
+    assert "body: Pet | None = None" in src
+    # The renderer must guard the content= arg behind an `if body is not None:` check
+    assert "if body is not None:" in src
+    # And there must be a fallback call without the content= arg
+    assert src.count('await self._http.put("/pets"') == 2

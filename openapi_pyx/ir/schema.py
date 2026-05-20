@@ -1,0 +1,112 @@
+"""Normalized schema IR (post-lowering)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+PrimitiveKind = Literal["string", "integer", "number", "boolean", "null"]
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveSchema:
+    kind: PrimitiveKind
+    format: str | None = None
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LiteralSchema:
+    """Schema whose only valid values are an enumerated set."""
+
+    values: list[str | int | float | bool]
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class EnumSchema:
+    """A reusable named enum (emitted as a Python Enum or Literal alias)."""
+
+    name: str
+    values: list[str]
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ArraySchema:
+    items: Schema
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SchemaField:
+    name: str
+    schema: Schema
+    required: bool
+    description: str | None = None
+    serialization_alias: str | None = None  # set when name != original property name
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectSchema:
+    fields: list[SchemaField]
+    additional_properties: Schema | None | Literal["any"] = None
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class NamedSchemaRef:
+    """Reference to a top-level named schema. `recursive` is set if part of a cycle."""
+
+    name: str
+    recursive: bool = False
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DiscriminatedUnion:
+    """`oneOf` lowered with an explicit `discriminator.propertyName`."""
+
+    property_name: str
+    mapping: Mapping[str, NamedSchemaRef]
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class TaggedUnion:
+    """`oneOf`/`anyOf` lowered without a discriminator: tried in order via model_validator."""
+
+    members: list[Schema]
+    nullable: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class FreeFormSchema:
+    """`additionalProperties: true` with no schema, or `{}` schema."""
+
+    nullable: bool = False
+
+
+Schema = (
+    PrimitiveSchema
+    | LiteralSchema
+    | EnumSchema
+    | ArraySchema
+    | ObjectSchema
+    | NamedSchemaRef
+    | DiscriminatedUnion
+    | TaggedUnion
+    | FreeFormSchema
+)
+
+
+@dataclass(frozen=True, slots=True)
+class NamedSchema:
+    """A top-level schema component, addressable by name."""
+
+    name: str
+    schema: Schema
+    description: str | None = None

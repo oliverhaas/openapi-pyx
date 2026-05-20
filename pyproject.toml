@@ -27,7 +27,14 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+  "pydantic>=2.10",
+  "httpx>=0.28",
+  "openapi-pydantic>=0.5.1",
+  "ruff>=0.6",
+  "PyYAML>=6",
+  "typer>=0.15",
+]
 
 [project.urls]
 Homepage = "https://github.com/oliverhaas/openapi-pyx"
@@ -35,10 +42,14 @@ Documentation = "https://oliverhaas.github.io/openapi-pyx/"
 Repository = "https://github.com/oliverhaas/openapi-pyx.git"
 Changelog = "https://oliverhaas.github.io/openapi-pyx/reference/changelog/"
 
+[project.scripts]
+openapi-pyx = "openapi_pyx.cli:app"
+
 [dependency-groups]
 dev = [
   "pre-commit==4.6.0",
   "pytest==9.0.3",
+  "pytest-asyncio==1.3.0",
   "pytest-cov==7.1.0",
   "pytest-xdist==3.8.0",
   "ruff==0.15.13",
@@ -60,6 +71,7 @@ include = ["openapi_pyx", "LICENSE", "README.md"]
 target-version = "py314"
 line-length = 120
 fix = true
+extend-exclude = ["tests/fixtures/golden/**"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -71,6 +83,7 @@ ignore = ["COM812", "D", "E501", "EM", "TRY003"]
   "ARG",
   "F841",
   "FBT",
+  "PLR2004",
   "PT006",
   "PT011",
   "PT013",

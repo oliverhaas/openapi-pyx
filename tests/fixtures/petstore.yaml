@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: Petstore
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      tags: [pets]
+      operationId: listPets
+      summary: List all pets
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A paged array of pets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pets"
+    post:
+      tags: [pets]
+      operationId: createPet
+      summary: Create a pet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Pet"
+      responses:
+        "201":
+          description: Null response
+  /pets/{petId}:
+    get:
+      tags: [pets]
+      operationId: showPetById
+      summary: Info for a specific pet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        tag:
+          type: string
+    Pets:
+      type: array
+      items:
+        $ref: "#/components/schemas/Pet"

@@ -1,0 +1,11 @@
+openapi: 3.1.0
+info: { title: NullableArray, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Bag:
+      type: object
+      properties:
+        items:
+          type: [array, "null"]
+          items: { type: string }

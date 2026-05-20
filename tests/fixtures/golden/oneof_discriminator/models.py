@@ -16,5 +16,5 @@ class Cat(BaseModel):
 
 
 Animal = Annotated[
-    Annotated[Dog, Tag("dog")] | Annotated[Cat, Tag("cat")], Discriminator("kind"),
+    Annotated[Dog, Tag("dog")] | Annotated[Cat, Tag("cat")], Discriminator("kind")
 ]

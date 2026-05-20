@@ -22,6 +22,7 @@ repos:
       - id: detect-private-key
       - id: end-of-file-fixer
         stages: [pre-commit]
+        exclude: ^tests/fixtures/golden/
       - id: mixed-line-ending
         args: ["--fix=lf"]
 
@@ -35,6 +36,7 @@ repos:
     rev: v3.1.0
     hooks:
       - id: add-trailing-comma
+        exclude: ^tests/fixtures/golden/
 
   - repo: local
     hooks:

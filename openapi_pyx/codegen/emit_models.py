@@ -103,8 +103,16 @@ class _FieldImports:
 def _emit_object_fields(obj: ObjectSchema) -> tuple[list[ModelField], _FieldImports]:
     out: list[ModelField] = []
     imports = _FieldImports()
+    seen: set[str] = set()
     for f in obj.fields:
-        py_name = field_name(f.name)
+        base = field_name(f.name)
+        py_name = base
+        suffix = 2
+        while py_name in seen:
+            py_name = f"{base}_{suffix}"
+            suffix += 1
+        seen.add(py_name)
+
         type_expr = _render_type(f.schema)
         default = None if f.required else "None"
         # If field is optional and the type doesn't already permit None, widen it.

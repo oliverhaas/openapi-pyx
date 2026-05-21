@@ -46,7 +46,7 @@ def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:  # noqa:
     if schema.allOf:
         schema = compose_allof(schema, index)
 
-    if schema.discriminator and schema.oneOf:
+    if schema.discriminator and schema.oneOf and _can_dispatch_discriminator(schema):
         return _lower_discriminated_oneof(schema, index)
 
     if schema.oneOf or schema.anyOf:
@@ -70,6 +70,20 @@ def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:  # noqa:
         return PrimitiveSchema(kind=_DATATYPE_TO_KIND[kind], format=schema.schema_format, nullable=nullable)
 
     return FreeFormSchema(nullable=nullable)
+
+
+def _can_dispatch_discriminator(schema: Schema) -> bool:
+    """A discriminated oneOf is only usable when every branch is a $ref.
+
+    Inline branches have no component name to put in the discriminator
+    mapping, so we lower them as a plain tagged union instead.
+    """
+    disc = schema.discriminator
+    if disc is None:
+        return False
+    if disc.mapping:
+        return True
+    return all(isinstance(b, Reference) for b in schema.oneOf or ())
 
 
 def _lower_discriminated_oneof(schema: Schema, index: SchemaIndex) -> DiscriminatedUnion:

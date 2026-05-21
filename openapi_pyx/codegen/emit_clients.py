@@ -50,6 +50,9 @@ def emit_client_module(group: TagGroup) -> Module:
         Import("httpx"),
         ImportFrom("pydantic", ["TypeAdapter"]),
     ]
+    needs_any = any("Any" in tgt for tgt in adapter_targets) or any(_method_uses_any(m) for m in methods)
+    if needs_any:
+        imports.insert(0, ImportFrom("typing", ["Any"]))
     if referenced_models:
         imports.append(ImportFrom("..models", referenced_models))
 
@@ -113,6 +116,12 @@ def _emit_method(op: Operation) -> AsyncMethod:
         response_type=response_type,
         docstring=op.summary,
     )
+
+
+def _method_uses_any(m: AsyncMethod) -> bool:
+    if m.return_type and "Any" in m.return_type.rendered:
+        return True
+    return any(p.type_expr and "Any" in p.type_expr.rendered for p in m.params)
 
 
 def _render_param_type(schema: Schema, *, optional: bool) -> str:

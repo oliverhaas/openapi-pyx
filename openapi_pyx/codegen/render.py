@@ -20,10 +20,18 @@ from openapi_pyx.codegen.nodes import (
 INDENT = "    "
 
 
+def _docstring(text: str) -> str:
+    """Wrap arbitrary text as a `\"\"\"...\"\"\"` docstring, escaping embedded triple quotes."""
+    escaped = text.replace('"""', '\\"\\"\\"')
+    if escaped.endswith('"'):
+        escaped += " "
+    return f'"""{escaped}"""'
+
+
 def render_module(mod: Module) -> str:
     out: list[str] = []
     if mod.docstring is not None:
-        out.append(f'"""{mod.docstring}"""')
+        out.append(_docstring(mod.docstring))
         out.append("")
     out.extend(_render_import(imp) for imp in mod.imports)
     if mod.imports:
@@ -59,7 +67,7 @@ def _render_stmt(stmt: object) -> str:
 def _render_pydantic_model(m: PydanticModel) -> str:
     lines = [f"class {m.name}({m.base}):"]
     if m.docstring:
-        lines.append(f'{INDENT}"""{m.docstring}"""')
+        lines.append(f"{INDENT}{_docstring(m.docstring)}")
     config_args: list[str] = []
     if m.extra is not None:
         config_args.append(f'extra="{m.extra}"')
@@ -88,7 +96,7 @@ def _render_model_field(f: ModelField) -> str:
 def _render_client_class(c: ClientClass) -> str:
     lines = [f"class {c.name}:"]
     if c.docstring:
-        lines.append(f'{INDENT}"""{c.docstring}"""')
+        lines.append(f"{INDENT}{_docstring(c.docstring)}")
     lines.append(f"{INDENT}def __init__(self, http: httpx.AsyncClient) -> None:")
     lines.append(f"{INDENT * 2}self._http = http")
     for method in c.methods:
@@ -129,7 +137,7 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
     indent = INDENT * 2
     lines: list[str] = []
     if m.docstring:
-        lines.append(f'{indent}"""{m.docstring}"""')
+        lines.append(f"{indent}{_docstring(m.docstring)}")
 
     url_expr = _render_url_expr(m.url_template, m.path_params)
 
@@ -200,7 +208,7 @@ def _render_root_client(c: RootClient) -> str:
         f"class {c.name}:",
     ]
     if c.docstring:
-        lines.append(f'{INDENT}"""{c.docstring}"""')
+        lines.append(f"{INDENT}{_docstring(c.docstring)}")
     lines.extend(
         [
             f"{INDENT}def __init__(self, base_url: str, *, http: httpx.AsyncClient | None = None) -> None:",

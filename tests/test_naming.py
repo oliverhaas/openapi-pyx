@@ -43,3 +43,20 @@ def test_field_name_preserves_builtins():
 def test_field_name_appends_underscore_for_keywords():
     assert field_name("class") == "class_"
     assert field_name("for") == "for_"
+
+
+def test_snake_case_sanitizes_non_identifier_chars():
+    # GitHub uses `tag/operation` for operationIds, `+1`/`-1` for reaction fields.
+    assert snake_case("repos/list-for-org") == "repos_list_for_org"
+    assert snake_case("+1") == "_1"
+    assert snake_case("-1") == "_1"
+
+
+def test_method_name_sanitizes_slash_in_operation_id():
+    assert method_name("repos/list-for-org") == "repos_list_for_org"
+
+
+def test_field_name_avoids_leading_underscore_for_pydantic():
+    # Pydantic v2 rejects field names starting with `_`.
+    assert field_name("+1") == "f_1"
+    assert field_name("-1") == "f_1"

@@ -172,8 +172,6 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
 
     if m.response_type is not None:
         lines.append(f"{indent}return {_adapter_name(m.response_type)}.validate_json(resp.content)")
-    else:
-        lines.append(f"{indent}return None")
 
     return "\n".join(lines)
 

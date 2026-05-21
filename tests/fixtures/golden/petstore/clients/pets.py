@@ -33,7 +33,6 @@ class PetsClient:
             content=body.model_dump_json(by_alias=True, exclude_none=True),
         )
         resp.raise_for_status()
-        return None
 
     async def show_pet_by_id(self, *, pet_id: str) -> Pet:
         """Info for a specific pet"""

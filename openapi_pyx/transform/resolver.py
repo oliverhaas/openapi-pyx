@@ -33,9 +33,14 @@ def build_schema_index(spec: OpenAPI) -> SchemaIndex:
     if components is None or not components.schemas:
         return SchemaIndex(schemas={})
 
-    schemas: dict[str, Schema] = {
-        name: schema for name, schema in components.schemas.items() if isinstance(schema, Schema)
-    }
+    schemas: dict[str, Schema] = {}
+    for name, schema in components.schemas.items():
+        if not isinstance(schema, Schema) or (schema.model_extra or {}).get("$ref"):
+            raise ResolveError(
+                f"components.schemas.{name} is a top-level $ref alias. "
+                "These aren't supported in v0.1; inline the target schema instead.",
+            )
+        schemas[name] = schema
 
     recursive = _find_recursive(schemas)
     return SchemaIndex(schemas=schemas, recursive_names=recursive)

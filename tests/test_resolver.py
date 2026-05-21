@@ -28,6 +28,24 @@ def test_mutually_recursive_both_marked():
     assert {"A", "B"} <= index.recursive_names
 
 
+def test_rejects_top_level_ref_alias_in_components(tmp_path):
+    p = tmp_path / "alias.yaml"
+    p.write_text(
+        "openapi: 3.1.0\n"
+        "info: { title: x, version: '1' }\n"
+        "paths: {}\n"
+        "components:\n"
+        "  schemas:\n"
+        "    Real:\n"
+        "      type: object\n"
+        "      properties: { id: { type: integer } }\n"
+        '    Alias: { $ref: "#/components/schemas/Real" }\n',
+    )
+    spec = load_spec(p)
+    with pytest.raises(ResolveError, match="top-level"):
+        build_schema_index(spec)
+
+
 def test_rejects_non_components_ref(tmp_path):
     p = tmp_path / "bad.yaml"
     p.write_text(

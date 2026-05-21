@@ -49,5 +49,9 @@ def _follow(node: Schema | Reference, index: SchemaIndex) -> Schema:
     if isinstance(node, Reference):
         if not node.ref.startswith(COMPONENT_PREFIX):
             raise ValueError(f"Unsupported $ref in allOf: {node.ref!r}")
-        return index.schemas[node.ref.removeprefix(COMPONENT_PREFIX)]
+        name = node.ref.removeprefix(COMPONENT_PREFIX)
+        target = index.schemas.get(name)
+        if target is None:
+            raise ValueError(f"allOf references unknown schema: {name!r}")
+        return target
     return node

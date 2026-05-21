@@ -20,6 +20,14 @@ def test_model_name_pascalcase_and_keyword_safe():
     assert model_name("class") == "Class_"
 
 
+def test_model_name_handles_pascal_keyword_literals():
+    # `None`, `True`, `False` are stored as PascalCase in keyword.kwlist;
+    # the lowercase form check alone would miss them.
+    assert model_name("none") == "None_"
+    assert model_name("true") == "True_"
+    assert model_name("false") == "False_"
+
+
 def test_module_name_snake_lower():
     assert module_name("Pets") == "pets"
     assert module_name("PetOwners") == "pet_owners"

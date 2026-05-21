@@ -26,7 +26,9 @@ def model_name(name: str) -> str:
     """PascalCase model name with a trailing `_` if it would collide with a Python keyword or builtin."""
     parts = snake_case(name).split("_")
     pascal = "".join(p.capitalize() for p in parts if p)
-    return f"{pascal}_" if pascal.lower() in _PYTHON_RESERVED else pascal
+    if pascal in _PYTHON_RESERVED or pascal.lower() in _PYTHON_RESERVED:
+        return f"{pascal}_"
+    return pascal
 
 
 def field_name(name: str) -> str:

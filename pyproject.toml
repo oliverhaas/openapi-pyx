@@ -38,9 +38,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/oliverhaas/openapi-pyx"
-Documentation = "https://oliverhaas.github.io/openapi-pyx/"
 Repository = "https://github.com/oliverhaas/openapi-pyx.git"
-Changelog = "https://oliverhaas.github.io/openapi-pyx/reference/changelog/"
 
 [project.scripts]
 openapi-pyx = "openapi_pyx.cli:app"
@@ -55,7 +53,6 @@ dev = [
   "ruff==0.15.14",
   "ty==0.0.38",
 ]
-docs = ["mkdocs==1.6.1", "mkdocs-material==9.7.6", "mike==2.2.0"]
 
 [build-system]
 requires = ["hatchling"]

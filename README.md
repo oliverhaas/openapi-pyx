@@ -47,10 +47,6 @@ asyncio.run(main())
 - No auth helpers yet (planned for v0.2)
 - No pagination, retries, or webhooks
 
-## Documentation
-
-Full documentation at [oliverhaas.github.io/openapi-pyx](https://oliverhaas.github.io/openapi-pyx/)
-
 ## License
 
 MIT

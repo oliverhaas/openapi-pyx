@@ -11,9 +11,7 @@ from openapi_pyx.codegen.nodes import (
 from openapi_pyx.ir.schema import (
     ArraySchema,
     DiscriminatedUnion,
-    EnumSchema,
     FreeFormSchema,
-    LiteralSchema,
     NamedSchema,
     NamedSchemaRef,
     ObjectSchema,
@@ -141,12 +139,6 @@ def _render_type(schema: Schema) -> str:  # noqa: PLR0911
     if isinstance(schema, NamedSchemaRef):
         ref = f'"{model_name(schema.name)}"' if schema.recursive else model_name(schema.name)
         return f"{ref} | None" if schema.nullable else ref
-    if isinstance(schema, LiteralSchema):
-        values = ", ".join(repr(v) for v in schema.values)
-        out = f"Literal[{values}]"
-        return f"{out} | None" if schema.nullable else out
-    if isinstance(schema, EnumSchema):
-        return model_name(schema.name)
     if isinstance(schema, FreeFormSchema):
         return "Any | None" if schema.nullable else "Any"
     if isinstance(schema, ObjectSchema):

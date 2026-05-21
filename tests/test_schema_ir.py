@@ -1,7 +1,5 @@
 from openapi_pyx.ir.schema import (
     DiscriminatedUnion,
-    EnumSchema,
-    LiteralSchema,
     NamedSchemaRef,
     ObjectSchema,
     PrimitiveSchema,
@@ -44,13 +42,3 @@ def test_tagged_union_carries_member_schemas():
     members_count = 2
     u = TaggedUnion(members=[NamedSchemaRef("Foo"), NamedSchemaRef("Bar")])
     assert len(u.members) == members_count
-
-
-def test_literal_schema_holds_values():
-    s = LiteralSchema(values=["a", "b"])
-    assert s.values == ["a", "b"]
-
-
-def test_enum_schema_is_named():
-    s = EnumSchema(name="Color", values=["red", "green"])
-    assert s.name == "Color"

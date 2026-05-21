@@ -19,23 +19,6 @@ class PrimitiveSchema:
 
 
 @dataclass(frozen=True, slots=True)
-class LiteralSchema:
-    """Schema whose only valid values are an enumerated set."""
-
-    values: list[str | int | float | bool]
-    nullable: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class EnumSchema:
-    """A reusable named enum (emitted as a Python Enum or Literal alias)."""
-
-    name: str
-    values: list[str]
-    nullable: bool = False
-
-
-@dataclass(frozen=True, slots=True)
 class ArraySchema:
     items: Schema
     nullable: bool = False
@@ -91,15 +74,7 @@ class FreeFormSchema:
 
 
 Schema = (
-    PrimitiveSchema
-    | LiteralSchema
-    | EnumSchema
-    | ArraySchema
-    | ObjectSchema
-    | NamedSchemaRef
-    | DiscriminatedUnion
-    | TaggedUnion
-    | FreeFormSchema
+    PrimitiveSchema | ArraySchema | ObjectSchema | NamedSchemaRef | DiscriminatedUnion | TaggedUnion | FreeFormSchema
 )
 
 

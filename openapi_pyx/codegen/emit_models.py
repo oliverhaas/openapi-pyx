@@ -1,10 +1,12 @@
 """Emit normalized schemas as Pydantic v2 model declarations."""
 
 from openapi_pyx.codegen.nodes import (
+    Import,
     ImportFrom,
     ModelField,
     Module,
     PydanticModel,
+    Stmt,
     TypeAlias,
     TypeExpr,
 )
@@ -31,7 +33,7 @@ _PRIMITIVE_PY = {
 
 
 def emit_models_module(schemas: list[NamedSchema]) -> Module:
-    body: list[object] = []
+    body: list[Stmt] = []
     field_needed = False
     annotated_needed = False
     discriminator_needed = False
@@ -65,7 +67,7 @@ def emit_models_module(schemas: list[NamedSchema]) -> Module:
         else:
             body.append(TypeAlias(name=cls_name, value=_render_type(s)))
 
-    imports: list[ImportFrom] = []
+    imports: list[Import | ImportFrom] = []
     if annotated_needed:
         imports.append(ImportFrom("typing", ["Annotated"]))
     if typing_any_needed:

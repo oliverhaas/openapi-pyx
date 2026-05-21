@@ -13,6 +13,7 @@ from openapi_pyx.codegen.nodes import (
     ImportFrom,
     Module,
     Param,
+    Stmt,
     TypeExpr,
 )
 from openapi_pyx.ir.operation import Operation, ParamLocation
@@ -36,7 +37,7 @@ def emit_client_module(group: TagGroup) -> Module:
 
     referenced_models = sorted(_collect_model_refs(group.operations))
 
-    body: list[object] = []
+    body: list[Stmt] = []
     # Per-response TypeAdapter pre-instantiated at module scope.
     adapter_targets = sorted({m.response_type.rendered for m in methods if m.response_type})
     for tgt in adapter_targets:

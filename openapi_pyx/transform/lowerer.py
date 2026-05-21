@@ -11,6 +11,7 @@ from openapi_pyx.ir.schema import (
     NamedSchema,
     NamedSchemaRef,
     ObjectSchema,
+    PrimitiveKind,
     PrimitiveSchema,
     SchemaField,
     TaggedUnion,
@@ -20,7 +21,13 @@ from openapi_pyx.transform import COMPONENT_PREFIX
 from openapi_pyx.transform.normalizer import compose_allof
 from openapi_pyx.transform.resolver import SchemaIndex  # noqa: TC001
 
-_PRIMITIVE_KINDS = {DataType.STRING, DataType.INTEGER, DataType.NUMBER, DataType.BOOLEAN, DataType.NULL}
+_DATATYPE_TO_KIND: dict[DataType, PrimitiveKind] = {
+    DataType.STRING: "string",
+    DataType.INTEGER: "integer",
+    DataType.NUMBER: "number",
+    DataType.BOOLEAN: "boolean",
+    DataType.NULL: "null",
+}
 
 
 def lower_components(index: SchemaIndex) -> list[NamedSchema]:
@@ -56,10 +63,10 @@ def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:  # noqa:
     if DataType.OBJECT in types or schema.properties is not None or schema.additionalProperties is not None:
         return _lower_object(schema, index, nullable=nullable)
 
-    if types and all(t in _PRIMITIVE_KINDS for t in types):
+    if types and all(t in _DATATYPE_TO_KIND for t in types):
         # take the first non-null primitive
         kind = next(t for t in types if t != DataType.NULL)
-        return PrimitiveSchema(kind=kind.value, format=schema.schema_format, nullable=nullable)
+        return PrimitiveSchema(kind=_DATATYPE_TO_KIND[kind], format=schema.schema_format, nullable=nullable)
 
     return FreeFormSchema(nullable=nullable)
 

@@ -10,6 +10,17 @@ from openapi_pyx.transform.resolver import build_schema_index
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def test_2xx_wildcard_response_is_picked_up():
+    spec = load_spec(FIXTURES / "edge" / "wildcard_2xx.yaml")
+    index = build_schema_index(spec)
+    schemas = lower_components(index)
+    doc = build_document(spec, index, schemas)
+    op = next(o for tag in doc.tags for o in tag.operations if o.operation_id == "listThings")
+    assert op.response is not None, "Response should be picked up for 2XX wildcard"
+    assert isinstance(op.response.schema, NamedSchemaRef)
+    assert op.response.schema.name == "Thing"
+
+
 def test_petstore_document_groups_by_tag():
     spec = load_spec(FIXTURES / "petstore.yaml")
     index = build_schema_index(spec)

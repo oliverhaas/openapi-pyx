@@ -1,0 +1,21 @@
+openapi: 3.1.0
+info: { title: WildcardResp, version: 1.0.0 }
+paths:
+  /things:
+    get:
+      tags: [things]
+      operationId: listThings
+      responses:
+        "2XX":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+components:
+  schemas:
+    Thing:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }

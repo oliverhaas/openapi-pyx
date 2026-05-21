@@ -84,9 +84,11 @@ def _build_body(body: SpecBody | Reference | None, index: SchemaIndex) -> Reques
 def _build_response(op: SpecOp, index: SchemaIndex) -> Response | None:
     if not op.responses:
         return None
-    # Pick the first 2xx with application/json content.
+    # Pick the first 2xx with application/json content. OpenAPI 3.1 also
+    # allows wildcards like "2XX", so match both fixed 2xx codes and the
+    # wildcard form.
     for status, resp in op.responses.items():
-        if not status.startswith("2"):
+        if not _is_2xx(status):
             continue
         if isinstance(resp, Reference):
             continue
@@ -98,3 +100,12 @@ def _build_response(op: SpecOp, index: SchemaIndex) -> Response | None:
             content_type="application/json",
         )
     return None
+
+
+_STATUS_CODE_LENGTH = 3
+
+
+def _is_2xx(status: str) -> bool:
+    if status.upper() == "2XX":
+        return True
+    return len(status) == _STATUS_CODE_LENGTH and status[0] == "2" and status[1:].isdigit()

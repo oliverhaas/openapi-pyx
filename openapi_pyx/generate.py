@@ -27,9 +27,16 @@ def generate_client(spec_path: Path, out_dir: Path) -> None:
     doc = build_document(spec, index, schemas)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "clients").mkdir(exist_ok=True)
-
     (out_dir / "models.py").write_text(render_module(emit_models_module(schemas)))
+
+    if not doc.tags:
+        (out_dir / "__init__.py").write_text(
+            '"""Models-only package: the spec defined no operations under `paths`."""\n',
+        )
+        format_directory(out_dir)
+        return
+
+    (out_dir / "clients").mkdir(exist_ok=True)
     (out_dir / "client.py").write_text(render_module(emit_root_module(doc)))
 
     for tag in doc.tags:

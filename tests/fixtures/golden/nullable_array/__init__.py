@@ -1,3 +1,1 @@
-from .client import Client
-
-__all__ = ["Client"]
+"""Models-only package: the spec defined no operations under `paths`."""

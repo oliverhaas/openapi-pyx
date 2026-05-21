@@ -46,11 +46,20 @@ def build_schema_index(spec: OpenAPI) -> SchemaIndex:
     return SchemaIndex(schemas=schemas, recursive_names=recursive)
 
 
+_ALLOWED_REF_PREFIXES = (
+    "#/components/schemas/",
+    "#/components/parameters/",
+    "#/components/requestBodies/",
+    "#/components/responses/",
+    "#/components/headers/",
+)
+
+
 def _validate_refs_targets(spec: OpenAPI) -> None:
-    """Walk the entire spec; every $ref must point at `#/components/schemas/…`."""
+    """Walk the entire spec; every $ref must point into a supported components section."""
     for ref in _iter_refs(spec.model_dump(by_alias=True, exclude_none=True)):
-        if not ref.startswith(COMPONENT_PREFIX):
-            raise ResolveError(f"Only $refs to components/schemas are supported in v0.1; got {ref!r}")
+        if not ref.startswith(_ALLOWED_REF_PREFIXES):
+            raise ResolveError(f"Unsupported $ref target {ref!r}; expected one of {_ALLOWED_REF_PREFIXES}")
 
 
 def _iter_refs(node: Any) -> Iterator[str]:  # noqa: ANN401

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path  # noqa: TC003
+from typing import Any
 
 import yaml
 from openapi_pydantic.v3.v3_1 import OpenAPI
@@ -25,10 +26,25 @@ def load_spec(path: Path) -> OpenAPI:
     if not isinstance(version, str) or not version.startswith("3.1"):
         raise LoadError(f"Only OpenAPI 3.1 is supported; got openapi={version!r}")
 
-    if "paths" not in raw:
-        raise LoadError("Spec is missing required `paths` section")
+    _strip_examples(raw)
 
     try:
         return OpenAPI.model_validate(raw)
     except Exception as exc:
         raise LoadError(f"Spec failed validation: {exc}") from exc
+
+
+def _strip_examples(node: Any) -> None:  # noqa: ANN401
+    """Drop `example` and `examples` fields recursively.
+
+    They're documentation only, and their `$ref`s into `#/components/examples/`
+    would otherwise need separate handling we don't care about for codegen.
+    """
+    if isinstance(node, dict):
+        node.pop("example", None)
+        node.pop("examples", None)
+        for v in node.values():
+            _strip_examples(v)
+    elif isinstance(node, list):
+        for item in node:
+            _strip_examples(item)

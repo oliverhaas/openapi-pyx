@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from openapi_pydantic.v3.v3_1 import OpenAPI, Schema
 
+from openapi_pyx.transform import COMPONENT_PREFIX
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -21,9 +23,6 @@ class SchemaIndex:
 
     schemas: dict[str, Schema]
     recursive_names: set[str] = field(default_factory=set)
-
-
-_COMPONENT_PREFIX = "#/components/schemas/"
 
 
 def build_schema_index(spec: OpenAPI) -> SchemaIndex:
@@ -45,7 +44,7 @@ def build_schema_index(spec: OpenAPI) -> SchemaIndex:
 def _validate_refs_targets(spec: OpenAPI) -> None:
     """Walk the entire spec; every $ref must point at `#/components/schemas/…`."""
     for ref in _iter_refs(spec.model_dump(by_alias=True, exclude_none=True)):
-        if not ref.startswith(_COMPONENT_PREFIX):
+        if not ref.startswith(COMPONENT_PREFIX):
             raise ResolveError(f"Only $refs to components/schemas are supported in v0.1; got {ref!r}")
 
 
@@ -71,7 +70,7 @@ def _find_recursive(schemas: dict[str, Schema]) -> set[str]:
 def _refs_in(schema: Schema) -> set[str]:
     """Extract schema names from $refs in a schema."""
     dumped = schema.model_dump(by_alias=True, exclude_none=True)
-    return {ref.removeprefix(_COMPONENT_PREFIX) for ref in _iter_refs(dumped) if ref.startswith(_COMPONENT_PREFIX)}
+    return {ref.removeprefix(COMPONENT_PREFIX) for ref in _iter_refs(dumped) if ref.startswith(COMPONENT_PREFIX)}
 
 
 def _strongly_connected_recursives(graph: dict[str, set[str]]) -> set[str]:  # noqa: C901

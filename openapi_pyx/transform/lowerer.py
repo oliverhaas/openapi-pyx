@@ -16,11 +16,11 @@ from openapi_pyx.ir.schema import (
     TaggedUnion,
 )
 from openapi_pyx.ir.schema import Schema as IRSchema
+from openapi_pyx.transform import COMPONENT_PREFIX
 from openapi_pyx.transform.normalizer import compose_allof
 from openapi_pyx.transform.resolver import SchemaIndex  # noqa: TC001
 
 _PRIMITIVE_KINDS = {DataType.STRING, DataType.INTEGER, DataType.NUMBER, DataType.BOOLEAN, DataType.NULL}
-_COMPONENT_PREFIX = "#/components/schemas/"
 
 
 def lower_components(index: SchemaIndex) -> list[NamedSchema]:
@@ -72,15 +72,15 @@ def _lower_discriminated_oneof(schema: Schema, index: SchemaIndex) -> Discrimina
     mapping: dict[str, NamedSchemaRef] = {}
     if disc.mapping:
         for tag, ref in disc.mapping.items():
-            if not isinstance(ref, str) or not ref.startswith(_COMPONENT_PREFIX):
+            if not isinstance(ref, str) or not ref.startswith(COMPONENT_PREFIX):
                 raise ValueError(f"Discriminator mapping must reference components/schemas: {ref!r}")
-            name = ref.removeprefix(_COMPONENT_PREFIX)
+            name = ref.removeprefix(COMPONENT_PREFIX)
             mapping[tag] = NamedSchemaRef(name=name, recursive=name in index.recursive_names)
     else:
         for branch in schema.oneOf or ():
             if not isinstance(branch, Reference):
                 raise TypeError("Discriminated oneOf branches must be $refs")
-            name = branch.ref.removeprefix(_COMPONENT_PREFIX)
+            name = branch.ref.removeprefix(COMPONENT_PREFIX)
             mapping[name] = NamedSchemaRef(name=name, recursive=name in index.recursive_names)
 
     return DiscriminatedUnion(property_name=disc.propertyName, mapping=mapping)
@@ -123,7 +123,7 @@ def _split_nullable(type_field: object) -> tuple[bool, tuple[DataType, ...]]:
 
 
 def _ref_to_named(ref: str, index: SchemaIndex) -> NamedSchemaRef:
-    if not ref.startswith(_COMPONENT_PREFIX):
+    if not ref.startswith(COMPONENT_PREFIX):
         raise ValueError(f"Unsupported $ref: {ref!r}")
-    name = ref.removeprefix(_COMPONENT_PREFIX)
+    name = ref.removeprefix(COMPONENT_PREFIX)
     return NamedSchemaRef(name=name, recursive=name in index.recursive_names)

@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 from openapi_pydantic.v3.v3_1 import DataType, Reference, Schema
 
+from openapi_pyx.transform import COMPONENT_PREFIX
+
 if TYPE_CHECKING:
     from openapi_pyx.transform.resolver import SchemaIndex
-
-_COMPONENT_PREFIX = "#/components/schemas/"
 
 
 def compose_allof(schema: Schema, index: SchemaIndex) -> Schema:
@@ -47,7 +47,7 @@ def compose_allof(schema: Schema, index: SchemaIndex) -> Schema:
 
 def _follow(node: Schema | Reference, index: SchemaIndex) -> Schema:
     if isinstance(node, Reference):
-        if not node.ref.startswith(_COMPONENT_PREFIX):
+        if not node.ref.startswith(COMPONENT_PREFIX):
             raise ValueError(f"Unsupported $ref in allOf: {node.ref!r}")
-        return index.schemas[node.ref.removeprefix(_COMPONENT_PREFIX)]
+        return index.schemas[node.ref.removeprefix(COMPONENT_PREFIX)]
     return node

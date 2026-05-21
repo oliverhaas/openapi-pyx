@@ -2,21 +2,21 @@
 
 OpenAPI 3.1 → Python client generator. Pydantic v2 + httpx + async.
 
-## Quick Start
+## Usage
 
-Generate a type-safe, async Python client from your OpenAPI 3.1 specification:
+Generate a client from an OpenAPI 3.1 spec:
 
 ```console
 openapi-pyx generate path/to/spec.yaml --out ./my_client
 ```
 
-The generated client includes:
+The output is a Python package with three layers:
 
-- **models.py**: Pydantic v2 models for all `components/schemas`
-- **clients/<tag>.py**: one sub-client per OpenAPI tag, fully typed
-- **client.py**: top-level `Client` class with automatic session management
+- `my_client/models.py`: Pydantic v2 models, one per `components/schemas` entry
+- `my_client/clients/<tag>.py`: one sub-client per OpenAPI tag, with one async method per operation
+- `my_client/client.py`: top-level `Client` that wires sub-clients to a shared `httpx.AsyncClient`
 
-## Usage Example
+Use it:
 
 ```python
 import asyncio
@@ -30,11 +30,9 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## v0.1 Capabilities
+## v0.1 scope
 
-- **OpenAPI 3.1** spec generation (3.0 not supported)
-- **Async-only** client (sync support planned for v0.3 via `unasync`)
-- **Pydantic v2** models with full validation
-- **httpx** for HTTP, with built-in `AsyncClient` lifecycle
-- **No auth helpers** yet (v0.2 roadmap)
-- **No pagination, retries, or webhooks** (future versions)
+- OpenAPI 3.1 only (3.0 rejected)
+- Async client only (sync via `unasync` planned for v0.3)
+- No auth helpers yet (planned for v0.2)
+- No pagination, retries, or webhooks

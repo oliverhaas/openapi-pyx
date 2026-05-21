@@ -32,7 +32,7 @@ def model_name(name: str) -> str:
 
 
 def field_name(name: str) -> str:
-    """Snake-cased field name (class attribute) — only avoids Python keywords, not builtins."""
+    """Snake-cased field name (class attribute). Only avoids Python keywords, not builtins."""
     snake = snake_case(name)
     return f"{snake}_" if snake in _PYTHON_KEYWORDS else snake
 

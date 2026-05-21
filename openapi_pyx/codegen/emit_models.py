@@ -107,8 +107,8 @@ def _emit_object_fields(obj: ObjectSchema) -> tuple[list[ModelField], _FieldImpo
         py_name = field_name(f.name)
         type_expr = _render_type(f.schema)
         default = None if f.required else "None"
-        # If field is optional and type doesn't already include "None", widen it
-        if not f.required and "None" not in type_expr:
+        # If field is optional and the type doesn't already permit None, widen it.
+        if not f.required and not _renders_with_none(f.schema):
             type_expr = f"{type_expr} | None"
 
         serialization_alias = f.name if py_name != f.name else None
@@ -130,6 +130,15 @@ def _emit_object_fields(obj: ObjectSchema) -> tuple[list[ModelField], _FieldImpo
         imports.any = True
 
     return out, imports
+
+
+def _renders_with_none(schema: Schema) -> bool:
+    """Whether `_render_type(schema)` already produces a type that admits None."""
+    if isinstance(schema, PrimitiveSchema):
+        return schema.nullable or schema.kind == "null"
+    if isinstance(schema, TaggedUnion):
+        return schema.nullable or any(_renders_with_none(m) for m in schema.members)
+    return getattr(schema, "nullable", False)
 
 
 def _render_type(schema: Schema) -> str:  # noqa: PLR0911

@@ -61,6 +61,17 @@ def test_sanitized_field_model_round_trips_alias_and_python_name(tmp_path: Path)
     assert '"for":7' in dumped
 
 
+def test_optional_union_with_null_member_accepts_string_and_null(tmp_path: Path):
+    models = _load_generated_models(
+        tmp_path,
+        FIXTURES / "edge" / "optional_union_with_null.yaml",
+        "optional_union_with_null_client",
+    )
+    assert models.Holder.model_validate({"any_of_with_null": "ok"}).any_of_with_null == "ok"
+    assert models.Holder.model_validate({"any_of_with_null": None}).any_of_with_null is None
+    assert models.Holder.model_validate({}).any_of_with_null is None
+
+
 def test_pet_model_validates_real_payload(tmp_path: Path):
     models = _generate_and_load(tmp_path)
     payload = json.loads((FIXTURES / "payloads" / "petstore_pet.json").read_text())

@@ -64,8 +64,9 @@ def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:  # noqa:
         return _lower_object(schema, index, nullable=nullable)
 
     if types and all(t in _DATATYPE_TO_KIND for t in types):
-        # take the first non-null primitive
-        kind = next(t for t in types if t != DataType.NULL)
+        # Take the first non-null primitive, falling back to "null" itself
+        # when that's the only declared type.
+        kind = next((t for t in types if t != DataType.NULL), DataType.NULL)
         return PrimitiveSchema(kind=_DATATYPE_TO_KIND[kind], format=schema.schema_format, nullable=nullable)
 
     return FreeFormSchema(nullable=nullable)

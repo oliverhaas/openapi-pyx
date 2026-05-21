@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info: { title: OptionalUnionWithNull, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Holder:
+      type: object
+      properties:
+        any_of_with_null:
+          anyOf:
+            - type: string
+            - type: "null"

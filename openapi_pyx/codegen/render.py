@@ -61,7 +61,7 @@ def _render_pydantic_model(m: PydanticModel) -> str:
     if m.docstring:
         lines.append(f'{INDENT}"""{m.docstring}"""')
     if m.extra is not None:
-        lines.append(f'{INDENT}model_config = {{"extra": "{m.extra}"}}')
+        lines.append(f'{INDENT}model_config = ConfigDict(extra="{m.extra}")')
     if not m.fields and not m.docstring and m.extra is None:
         lines.append(f"{INDENT}pass")
         return "\n".join(lines)

@@ -37,6 +37,7 @@ def emit_models_module(schemas: list[NamedSchema]) -> Module:
     field_needed = False
     annotated_needed = False
     discriminator_needed = False
+    config_dict_needed = False
     typing_any_needed = False
 
     for ns in schemas:
@@ -45,16 +46,18 @@ def emit_models_module(schemas: list[NamedSchema]) -> Module:
 
         if isinstance(s, ObjectSchema):
             fields, field_imports = _emit_object_fields(s)
+            extra = "allow" if s.additional_properties == "any" else None
             body.append(
                 PydanticModel(
                     name=cls_name,
                     fields=fields,
                     docstring=ns.description,
-                    extra="allow" if s.additional_properties == "any" else None,
+                    extra=extra,
                 ),
             )
             field_needed = field_needed or field_imports.field
             typing_any_needed = typing_any_needed or field_imports.any
+            config_dict_needed = config_dict_needed or extra is not None
         elif isinstance(s, DiscriminatedUnion):
             body.append(_emit_discriminated_union_alias(cls_name, s))
             annotated_needed = True
@@ -71,6 +74,8 @@ def emit_models_module(schemas: list[NamedSchema]) -> Module:
         imports.append(ImportFrom("typing", ["Any"]))
 
     pydantic_imports = ["BaseModel"]
+    if config_dict_needed:
+        pydantic_imports.append("ConfigDict")
     if field_needed:
         pydantic_imports.append("Field")
     if discriminator_needed:

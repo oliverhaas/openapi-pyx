@@ -46,6 +46,22 @@ def test_render_pydantic_model_with_required_and_optional_fields():
     assert "    name: str | None = None" in src
 
 
+def test_render_pydantic_model_with_extra_emits_configdict():
+    mod = Module(
+        docstring=None,
+        imports=[ImportFrom("pydantic", ["BaseModel", "ConfigDict"])],
+        body=[
+            PydanticModel(
+                name="OpenBag",
+                fields=[ModelField(name="id", type_expr=TypeExpr("int"), required=True)],
+                extra="allow",
+            ),
+        ],
+    )
+    src = render_module(mod)
+    assert 'model_config = ConfigDict(extra="allow")' in src
+
+
 def test_render_field_with_serialization_alias():
     mod = Module(
         docstring=None,

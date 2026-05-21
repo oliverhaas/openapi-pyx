@@ -60,9 +60,14 @@ def _render_pydantic_model(m: PydanticModel) -> str:
     lines = [f"class {m.name}({m.base}):"]
     if m.docstring:
         lines.append(f'{INDENT}"""{m.docstring}"""')
+    config_args: list[str] = []
     if m.extra is not None:
-        lines.append(f'{INDENT}model_config = ConfigDict(extra="{m.extra}")')
-    if not m.fields and not m.docstring and m.extra is None:
+        config_args.append(f'extra="{m.extra}"')
+    if m.populate_by_name:
+        config_args.append("populate_by_name=True")
+    if config_args:
+        lines.append(f"{INDENT}model_config = ConfigDict({', '.join(config_args)})")
+    if not m.fields and not m.docstring and not config_args:
         lines.append(f"{INDENT}pass")
         return "\n".join(lines)
     lines.extend(f"{INDENT}{_render_model_field(f)}" for f in m.fields)

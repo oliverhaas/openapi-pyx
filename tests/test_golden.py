@@ -20,6 +20,7 @@ GOLDEN_CASES = [
     ("recursive_self", FIXTURES / "edge" / "recursive_self.yaml"),
     ("recursive_mutual", FIXTURES / "edge" / "recursive_mutual.yaml"),
     ("wildcard_2xx", FIXTURES / "edge" / "wildcard_2xx.yaml"),
+    ("sanitized_field", FIXTURES / "edge" / "sanitized_field.yaml"),
 ]
 
 

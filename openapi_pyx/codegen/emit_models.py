@@ -47,17 +47,19 @@ def emit_models_module(schemas: list[NamedSchema]) -> Module:
         if isinstance(s, ObjectSchema):
             fields, field_imports = _emit_object_fields(s)
             extra = "allow" if s.additional_properties == "any" else None
+            populate_by_name = any(f.serialization_alias is not None for f in fields)
             body.append(
                 PydanticModel(
                     name=cls_name,
                     fields=fields,
                     docstring=ns.description,
                     extra=extra,
+                    populate_by_name=populate_by_name,
                 ),
             )
             field_needed = field_needed or field_imports.field
             typing_any_needed = typing_any_needed or field_imports.any
-            config_dict_needed = config_dict_needed or extra is not None
+            config_dict_needed = config_dict_needed or extra is not None or populate_by_name
         elif isinstance(s, DiscriminatedUnion):
             body.append(_emit_discriminated_union_alias(cls_name, s))
             annotated_needed = True

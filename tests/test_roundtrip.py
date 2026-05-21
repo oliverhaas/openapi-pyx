@@ -27,6 +27,40 @@ def _generate_and_load(tmp_path: Path):
     return importlib.import_module("petstore_client.models")
 
 
+def _load_generated_models(tmp_path: Path, spec_path: Path, module_name: str):
+    out = tmp_path / module_name
+    generate_client(spec_path, out)
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        out / "__init__.py",
+        submodule_search_locations=[str(out)],
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return importlib.import_module(f"{module_name}.models")
+
+
+def test_sanitized_field_model_round_trips_alias_and_python_name(tmp_path: Path):
+    models = _load_generated_models(
+        tmp_path,
+        FIXTURES / "edge" / "sanitized_field.yaml",
+        "sanitized_field_client",
+    )
+    # Accept the wire (original) name as input.
+    item_via_alias = models.Item.model_validate({"class": "X", "for": 7})
+    assert item_via_alias.class_ == "X"
+    assert item_via_alias.for_ == 7
+    # Accept the Python-safe name as input (populate_by_name).
+    item_via_python = models.Item.model_validate({"class_": "Y"})
+    assert item_via_python.class_ == "Y"
+    # Output uses the wire name when by_alias=True.
+    dumped = item_via_alias.model_dump_json(by_alias=True, exclude_none=True)
+    assert '"class":"X"' in dumped
+    assert '"for":7' in dumped
+
+
 def test_pet_model_validates_real_payload(tmp_path: Path):
     models = _generate_and_load(tmp_path)
     payload = json.loads((FIXTURES / "payloads" / "petstore_pet.json").read_text())

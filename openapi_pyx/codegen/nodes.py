@@ -45,6 +45,8 @@ class PydanticModel:
     docstring: str | None = None
     # `extra` config for `model_config`, e.g. "allow" / "forbid"
     extra: Literal["allow", "forbid", "ignore"] | None = None
+    # When True, fields with aliases also accept the Python attribute name as input.
+    populate_by_name: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -73,12 +73,15 @@ def _emit_method(op: Operation) -> AsyncMethod:
     path_params: list[tuple[str, str]] = []
     header_params: list[tuple[str, str]] = []
     sig_params: list[Param] = [Param("self")]
+    param_docs: list[tuple[str, str]] = []
 
     for p in op.parameters:
         local = method_name(p.name)
         type_expr = _render_param_type(p.schema, optional=not p.required)
         default = None if p.required else "None"
         sig_params.append(Param(local, TypeExpr(type_expr), default=default, keyword_only=True))
+        if p.description:
+            param_docs.append((local, p.description))
         if p.location is ParamLocation.QUERY:
             query_params.append((p.name, local))
         elif p.location is ParamLocation.PATH:
@@ -114,12 +117,19 @@ def _emit_method(op: Operation) -> AsyncMethod:
         body_param=body_param,
         body_required=body_required,
         response_type=response_type,
-        docstring=_combine_summary_description(op.summary, op.description),
+        docstring=_build_docstring(op.summary, op.description, param_docs),
     )
 
 
-def _combine_summary_description(summary: str | None, description: str | None) -> str | None:
+def _build_docstring(
+    summary: str | None,
+    description: str | None,
+    param_docs: list[tuple[str, str]],
+) -> str | None:
     parts = [p for p in (summary, description) if p]
+    if param_docs:
+        args_block = "Args:\n" + "\n".join(f"    {name}: {desc}" for name, desc in param_docs)
+        parts.append(args_block)
     return "\n\n".join(parts) if parts else None
 
 

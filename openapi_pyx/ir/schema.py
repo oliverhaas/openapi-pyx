@@ -16,6 +16,7 @@ class PrimitiveSchema:
     kind: PrimitiveKind
     format: str | None = None
     nullable: bool = False
+    enum_values: list[Any] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,3 +87,4 @@ class NamedSchema:
     name: str
     schema: Schema
     description: str | None = None
+    examples: list[Any] = field(default_factory=list)

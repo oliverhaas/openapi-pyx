@@ -33,7 +33,12 @@ _DATATYPE_TO_KIND: dict[DataType, PrimitiveKind] = {
 def lower_components(index: SchemaIndex) -> list[NamedSchema]:
     """Lower every top-level component schema."""
     return [
-        NamedSchema(name=name, schema=_lower(schema, index), description=schema.description)
+        NamedSchema(
+            name=name,
+            schema=_lower(schema, index),
+            description=schema.description,
+            examples=_examples_of(schema),
+        )
         for name, schema in index.schemas.items()
     ]
 
@@ -67,7 +72,12 @@ def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:  # noqa:
         # Take the first non-null primitive, falling back to "null" itself
         # when that's the only declared type.
         kind = next((t for t in types if t != DataType.NULL), DataType.NULL)
-        return PrimitiveSchema(kind=_DATATYPE_TO_KIND[kind], format=schema.schema_format, nullable=nullable)
+        return PrimitiveSchema(
+            kind=_DATATYPE_TO_KIND[kind],
+            format=schema.schema_format,
+            nullable=nullable,
+            enum_values=_literal_enum_values(schema),
+        )
 
     return FreeFormSchema(nullable=nullable)
 
@@ -143,6 +153,16 @@ def _split_nullable(type_field: object) -> tuple[bool, tuple[DataType, ...]]:
         types = tuple(t for t in type_field if isinstance(t, DataType))
         return (DataType.NULL in types), tuple(t for t in types if t != DataType.NULL)
     return False, ()
+
+
+def _literal_enum_values(schema: Schema) -> list[object]:
+    """Schema's enum, filtered to JSON primitives only. Literal[] can't hold complex values."""
+    if not schema.enum:
+        return []
+    if not all(isinstance(v, str | int | float | bool) or v is None for v in schema.enum):
+        return []
+    # Drop None; nullability is tracked separately via `nullable`.
+    return [v for v in schema.enum if v is not None]
 
 
 def _examples_of(schema: Schema | Reference) -> list[object]:

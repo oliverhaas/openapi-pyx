@@ -72,10 +72,37 @@ def test_tictactoe_generates_client_with_path_level_param_refs(tmp_path: Path):
 def test_tictactoe_method_docstring_includes_summary_and_description(tmp_path: Path):
     pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_doc_client")
 
-    get_board = pkg.Client(base_url="https://api.example.com").gameplay.get_board
+    client = pkg.Client(base_url="https://api.example.com")
+    get_board = client.gameplay.get_board
     assert get_board.__doc__ is not None
     assert "Get the whole board" in get_board.__doc__  # summary
     assert "Retrieves the current state of the board" in get_board.__doc__  # description
+
+    # Parameter descriptions land in the Args: block.
+    get_square = client.gameplay.get_square
+    assert get_square.__doc__ is not None
+    assert "Args:" in get_square.__doc__
+    assert "row: Board row (vertical coordinate)" in get_square.__doc__
+    assert "column: Board column (horizontal coordinate)" in get_square.__doc__
+
+
+def test_tictactoe_aliases_carry_description_and_enum_constraints(tmp_path: Path):
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_alias_client")
+    from tictactoe_alias_client import models  # noqa: PLC0415
+
+    # `Mark` is `Annotated[Literal[".", "X", "O"], Field(description=...)]`.
+    # Pydantic exposes the Literal narrowing and the description when validating against it.
+
+    class Wrapper(models.BaseModel):
+        mark: models.Mark
+
+    schema = Wrapper.model_json_schema()
+    mark_schema = schema["properties"]["mark"]
+    if "$ref" in mark_schema:  # Pydantic may $defs-extract
+        ref_name = mark_schema["$ref"].rsplit("/", 1)[-1]
+        mark_schema = schema["$defs"][ref_name]
+    assert mark_schema["enum"] == [".", "X", "O"]
+    assert "board square" in mark_schema["description"].lower()
 
 
 @pytest.mark.asyncio

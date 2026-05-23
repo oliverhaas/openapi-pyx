@@ -88,20 +88,22 @@ def test_tictactoe_method_docstring_includes_summary_and_description(tmp_path: P
 
 def test_tictactoe_aliases_carry_description_and_enum_constraints(tmp_path: Path):
     pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_alias_client")
+    from pydantic import TypeAdapter  # noqa: PLC0415
     from tictactoe_alias_client import models  # noqa: PLC0415
 
-    # `Mark` is `class Mark(RootModel[Literal[...]])`; `__doc__` carries the spec description.
-    assert models.Mark.__doc__ is not None
-    assert "board square" in models.Mark.__doc__.lower()
+    # `Mark = Annotated[Literal[...], Field(description=..., examples=...)]`;
+    # Pydantic picks up the Field metadata via TypeAdapter.
+    mark_schema = TypeAdapter(models.Mark).json_schema()
+    assert mark_schema["enum"] == [".", "X", "O"]
+    assert "board square" in mark_schema["description"].lower()
 
-    # Numeric constraints on `coordinate` (`minimum: 1, maximum: 3`) reach Pydantic via Field args.
-    schema = models.Coordinate.model_json_schema()
-    assert schema["minimum"] == 1
-    assert schema["maximum"] == 3
-    assert schema["examples"] == [1]
+    coord_schema = TypeAdapter(models.Coordinate).json_schema()
+    assert coord_schema["minimum"] == 1
+    assert coord_schema["maximum"] == 3
+    assert coord_schema["examples"] == [1]
 
-    # `Mark.model_validate(value)` enforces the Literal enum at runtime.
-    assert models.Mark.model_validate("X").root == "X"
+    # Literal narrowing is enforced at runtime via TypeAdapter validation.
+    assert TypeAdapter(models.Mark).validate_python("X") == "X"
 
 
 @pytest.mark.asyncio
@@ -116,8 +118,7 @@ async def test_tictactoe_get_square_sends_path_params(tmp_path: Path):
     http = httpx.AsyncClient(transport=transport, base_url="https://api.example.com")
     async with pkg.Client(base_url="https://api.example.com", http=http) as client:
         mark = await client.gameplay.get_square(row=2, column=3)
-    # `Mark` is a `RootModel[Literal[...]]` so the wire value is unwrapped via `.root`.
-    assert mark.root == "X"
+    assert mark == "X"
 
 
 def test_webhook_example_emits_models_only_package(tmp_path: Path):

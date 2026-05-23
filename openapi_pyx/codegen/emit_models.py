@@ -33,7 +33,7 @@ _PRIMITIVE_PY = {
 
 
 class _ModuleImports:
-    __slots__ = ("annotated", "any", "config_dict", "discriminator", "field", "literal", "root_model")
+    __slots__ = ("annotated", "any", "config_dict", "discriminator", "field", "literal")
 
     def __init__(self) -> None:
         self.annotated = False
@@ -42,7 +42,6 @@ class _ModuleImports:
         self.discriminator = False
         self.field = False
         self.literal = False
-        self.root_model = False
 
 
 def emit_models_module(schemas: list[NamedSchema]) -> Module:
@@ -86,37 +85,22 @@ def _emit_named_schema(ns: NamedSchema, flags: _ModuleImports) -> Stmt:
     constraints = s.constraints if isinstance(s, PrimitiveSchema) else {}
     has_metadata = ns.description is not None or bool(ns.examples) or bool(constraints)
     if has_metadata:
-        return _emit_root_model(cls_name, rendered, ns, constraints, flags)
-    return TypeAlias(name=cls_name, value=rendered)
-
-
-def _emit_root_model(
-    cls_name: str,
-    rendered: str,
-    ns: NamedSchema,
-    constraints: dict[str, object],
-    flags: _ModuleImports,
-) -> PydanticModel:
-    """Wrap a non-Object schema in `class Name(RootModel[T])` to carry description/examples/constraints."""
-    flags.root_model = True
-    fields: list[ModelField] = []
-    if ns.examples or constraints:
+        flags.annotated = True
         flags.field = True
-        fields.append(
-            ModelField(
-                name="root",
-                type_expr=TypeExpr(rendered),
-                required=True,
-                examples=ns.examples,
-                constraints=constraints,
-            ),
-        )
-    return PydanticModel(
-        name=cls_name,
-        fields=fields,
-        base=f"RootModel[{rendered}]",
-        docstring=ns.description,
-    )
+        rendered = _wrap_with_field(rendered, ns, constraints)
+    return TypeAlias(name=cls_name, value=rendered, docstring=ns.description)
+
+
+def _wrap_with_field(rendered: str, ns: NamedSchema, constraints: dict[str, object]) -> str:
+    """Build `Annotated[<rendered>, Field(...)]`, splatting description/examples/constraints into Field."""
+    args: list[str] = []
+    if ns.description:
+        args.append(f"description={ns.description!r}")
+    if ns.examples:
+        args.append(f"examples={ns.examples!r}")
+    for k, v in constraints.items():
+        args.append(f"{k}={v!r}")
+    return f"Annotated[{rendered}, Field({', '.join(args)})]"
 
 
 def _build_imports(flags: _ModuleImports) -> list[Import | ImportFrom]:
@@ -139,8 +123,6 @@ def _build_imports(flags: _ModuleImports) -> list[Import | ImportFrom]:
     if flags.discriminator:
         pydantic_imports.append("Discriminator")
         pydantic_imports.append("Tag")
-    if flags.root_model:
-        pydantic_imports.append("RootModel")
     imports.append(ImportFrom("pydantic", pydantic_imports))
     return imports
 

@@ -90,7 +90,7 @@ def _render_pydantic_model(m: PydanticModel) -> str:
 
 def _render_model_field(f: ModelField) -> str:
     base = f"{f.name}: {f.type_expr.rendered}"
-    if f.serialization_alias is None and not f.description and not f.examples:
+    if f.serialization_alias is None and not f.description and not f.examples and not f.constraints:
         if f.default is not None:
             return f"{base} = {f.default}"
         return base
@@ -103,6 +103,8 @@ def _render_model_field(f: ModelField) -> str:
         args.append(f"description={_string_literal(f.description)}")
     if f.examples:
         args.append(f"examples={f.examples!r}")
+    for k, v in f.constraints.items():
+        args.append(f"{k}={v!r}")
     return f"{base} = Field({', '.join(args)})"
 
 

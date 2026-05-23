@@ -33,7 +33,7 @@ _PRIMITIVE_PY = {
 
 
 class _ModuleImports:
-    __slots__ = ("annotated", "any", "config_dict", "discriminator", "field", "literal")
+    __slots__ = ("annotated", "any", "config_dict", "discriminator", "field", "literal", "root_model")
 
     def __init__(self) -> None:
         self.annotated = False
@@ -42,6 +42,7 @@ class _ModuleImports:
         self.discriminator = False
         self.field = False
         self.literal = False
+        self.root_model = False
 
 
 def emit_models_module(schemas: list[NamedSchema]) -> Module:
@@ -79,12 +80,43 @@ def _emit_named_schema(ns: NamedSchema, flags: _ModuleImports) -> Stmt:
         return _emit_discriminated_union_alias(cls_name, s)
 
     rendered = _render_tagged_union(s) if isinstance(s, TaggedUnion) else _render_type(s)
-    wrapped, lit = _wrap_with_annotated(rendered, ns)
-    has_metadata = ns.description is not None or bool(ns.examples)
-    flags.literal = flags.literal or lit
-    flags.annotated = flags.annotated or has_metadata
-    flags.field = flags.field or has_metadata
-    return TypeAlias(name=cls_name, value=wrapped)
+    if "Literal[" in rendered:
+        flags.literal = True
+
+    constraints = s.constraints if isinstance(s, PrimitiveSchema) else {}
+    has_metadata = ns.description is not None or bool(ns.examples) or bool(constraints)
+    if has_metadata:
+        return _emit_root_model(cls_name, rendered, ns, constraints, flags)
+    return TypeAlias(name=cls_name, value=rendered)
+
+
+def _emit_root_model(
+    cls_name: str,
+    rendered: str,
+    ns: NamedSchema,
+    constraints: dict[str, object],
+    flags: _ModuleImports,
+) -> PydanticModel:
+    """Wrap a non-Object schema in `class Name(RootModel[T])` to carry description/examples/constraints."""
+    flags.root_model = True
+    fields: list[ModelField] = []
+    if ns.examples or constraints:
+        flags.field = True
+        fields.append(
+            ModelField(
+                name="root",
+                type_expr=TypeExpr(rendered),
+                required=True,
+                examples=ns.examples,
+                constraints=constraints,
+            ),
+        )
+    return PydanticModel(
+        name=cls_name,
+        fields=fields,
+        base=f"RootModel[{rendered}]",
+        docstring=ns.description,
+    )
 
 
 def _build_imports(flags: _ModuleImports) -> list[Import | ImportFrom]:
@@ -107,6 +139,8 @@ def _build_imports(flags: _ModuleImports) -> list[Import | ImportFrom]:
     if flags.discriminator:
         pydantic_imports.append("Discriminator")
         pydantic_imports.append("Tag")
+    if flags.root_model:
+        pydantic_imports.append("RootModel")
     imports.append(ImportFrom("pydantic", pydantic_imports))
     return imports
 
@@ -141,7 +175,8 @@ def _emit_object_fields(obj: ObjectSchema) -> tuple[list[ModelField], _FieldImpo
             type_expr = f"{type_expr} | None"
 
         serialization_alias = f.name if py_name != f.name else None
-        if serialization_alias is not None or f.description or f.examples:
+        constraints = f.schema.constraints if isinstance(f.schema, PrimitiveSchema) else {}
+        if serialization_alias is not None or f.description or f.examples or constraints:
             imports.field = True
 
         out.append(
@@ -152,6 +187,7 @@ def _emit_object_fields(obj: ObjectSchema) -> tuple[list[ModelField], _FieldImpo
                 default=default,
                 description=f.description,
                 examples=f.examples,
+                constraints=constraints,
                 serialization_alias=serialization_alias,
             ),
         )
@@ -201,19 +237,6 @@ def _render_type(schema: Schema) -> str:  # noqa: PLR0911
 def _render_tagged_union(u: TaggedUnion) -> str:
     members = " | ".join(_render_type(m) for m in u.members)
     return f"{members} | None" if u.nullable else members
-
-
-def _wrap_with_annotated(rendered: str, ns: NamedSchema) -> tuple[str, bool]:
-    """Wrap a rendered type with `Annotated[..., Field(description=, examples=)]` when metadata is present."""
-    literal_present = "Literal[" in rendered
-    if not ns.description and not ns.examples:
-        return rendered, literal_present
-    args: list[str] = []
-    if ns.description:
-        args.append(f"description={ns.description!r}")
-    if ns.examples:
-        args.append(f"examples={ns.examples!r}")
-    return f"Annotated[{rendered}, Field({', '.join(args)})]", literal_present
 
 
 def _emit_discriminated_union_alias(name: str, u: DiscriminatedUnion) -> TypeAlias:

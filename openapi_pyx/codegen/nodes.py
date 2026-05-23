@@ -35,6 +35,7 @@ class ModelField:
     default: str | None = None  # rendered as-is, e.g. "None" or '"open"'
     description: str | None = None
     examples: list[Any] = field(default_factory=list)
+    constraints: dict[str, Any] = field(default_factory=dict)  # Pydantic Field kwargs (ge, max_length, ...)
     serialization_alias: str | None = None  # set when name was sanitized away from original
 
 

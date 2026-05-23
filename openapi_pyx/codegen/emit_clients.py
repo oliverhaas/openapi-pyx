@@ -73,15 +73,15 @@ def _emit_method(op: Operation) -> AsyncMethod:
     path_params: list[tuple[str, str]] = []
     header_params: list[tuple[str, str]] = []
     sig_params: list[Param] = [Param("self")]
-    param_docs: list[tuple[str, str]] = []
+    param_docs: list[tuple[str, str | None, list[object]]] = []
 
     for p in op.parameters:
         local = method_name(p.name)
         type_expr = _render_param_type(p.schema, optional=not p.required)
         default = None if p.required else "None"
         sig_params.append(Param(local, TypeExpr(type_expr), default=default, keyword_only=True))
-        if p.description:
-            param_docs.append((local, p.description))
+        if p.description or p.examples:
+            param_docs.append((local, p.description, list(p.examples)))
         if p.location is ParamLocation.QUERY:
             query_params.append((p.name, local))
         elif p.location is ParamLocation.PATH:
@@ -124,13 +124,24 @@ def _emit_method(op: Operation) -> AsyncMethod:
 def _build_docstring(
     summary: str | None,
     description: str | None,
-    param_docs: list[tuple[str, str]],
+    param_docs: list[tuple[str, str | None, list[object]]],
 ) -> str | None:
     parts = [p for p in (summary, description) if p]
     if param_docs:
-        args_block = "Args:\n" + "\n".join(f"    {name}: {desc}" for name, desc in param_docs)
+        args_block = "Args:\n" + "\n".join(_render_arg(*pd) for pd in param_docs)
         parts.append(args_block)
     return "\n\n".join(parts) if parts else None
+
+
+def _render_arg(name: str, description: str | None, examples: list[object]) -> str:
+    parts: list[str] = []
+    if description:
+        parts.append(description)
+    if examples:
+        rendered = ", ".join(repr(e) for e in examples)
+        label = "examples" if len(examples) > 1 else "example"
+        parts.append(f"({label}: {rendered})")
+    return f"    {name}: {' '.join(parts)}"
 
 
 def _method_uses_any(m: AsyncMethod) -> bool:

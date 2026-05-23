@@ -10,8 +10,8 @@ from openapi_pydantic.v3.v3_1 import Response as SpecResponse
 
 from openapi_pyx.ir.document import Document, TagGroup
 from openapi_pyx.ir.operation import Operation, Parameter, ParamLocation, RequestBody, Response
-from openapi_pyx.ir.schema import NamedSchema  # noqa: TC001
-from openapi_pyx.transform.lowerer import _lower  # internal use OK
+from openapi_pyx.ir.schema import NamedSchema, NamedSchemaRef
+from openapi_pyx.transform.lowerer import _examples_of, _lower  # internal use OK
 from openapi_pyx.transform.resolver import SchemaIndex  # noqa: TC001
 
 _HTTP_METHODS = ("get", "put", "post", "delete", "patch", "head", "options", "trace")
@@ -23,6 +23,7 @@ _RESPONSE_PREFIX = "#/components/responses/"
 
 
 def build_document(spec: OpenAPI, index: SchemaIndex, schemas: list[NamedSchema]) -> Document:
+    by_name = {ns.name: ns for ns in schemas}
     tags: dict[str, list[Operation]] = {}
     for path, item in (spec.paths or {}).items():
         path_params = item.parameters or []
@@ -30,7 +31,7 @@ def build_document(spec: OpenAPI, index: SchemaIndex, schemas: list[NamedSchema]
             spec_op: SpecOp | None = getattr(item, method, None)
             if spec_op is None:
                 continue
-            op = _build_operation(spec_op, path, method, index, spec, path_params)
+            op = _build_operation(spec_op, path, method, index, spec, path_params, by_name)
             for tag in spec_op.tags or [_DEFAULT_TAG]:
                 tags.setdefault(tag, []).append(op)
 
@@ -48,6 +49,7 @@ def _build_operation(  # noqa: PLR0913
     index: SchemaIndex,
     spec: OpenAPI,
     path_params: list[SpecParam | Reference],
+    by_name: dict[str, NamedSchema],
 ) -> Operation:
     if not op.operationId:
         raise ValueError(f"Operation {method.upper()} {path} is missing operationId")
@@ -60,7 +62,7 @@ def _build_operation(  # noqa: PLR0913
         path=path,
         summary=op.summary,
         description=op.description,
-        parameters=[_build_param(p, index) for p in merged],
+        parameters=[_build_param(p, index, by_name) for p in merged],
         request_body=_build_body(op.requestBody, index, spec),
         response=_build_response(op, index, spec),
     )
@@ -82,18 +84,41 @@ def _merge_params(
     return list(by_key.values())
 
 
-def _build_param(param: SpecParam, index: SchemaIndex) -> Parameter:
+def _build_param(param: SpecParam, index: SchemaIndex, by_name: dict[str, NamedSchema]) -> Parameter:
     if param.param_in not in {"query", "path", "header"}:
         raise ValueError(f"Unsupported parameter location: {param.param_in}")
     if param.param_schema is None:
         raise ValueError(f"Parameter {param.name!r} is missing schema")
+    lowered = _lower(param.param_schema, index)
     return Parameter(
         name=param.name,
         location=ParamLocation(param.param_in),
         required=param.required if param.required is not None else (param.param_in == "path"),
-        schema=_lower(param.param_schema, index),
+        schema=lowered,
         description=param.description,
+        examples=_param_examples(param, lowered, by_name),
     )
+
+
+def _param_examples(
+    param: SpecParam,
+    lowered: object,
+    by_name: dict[str, NamedSchema],
+) -> list[object]:
+    if param.example is not None:
+        return [param.example]
+    schema = param.param_schema
+    if schema is not None and not isinstance(schema, Reference):
+        examples = _examples_of(schema)
+        if examples:
+            return examples
+    # Follow one level of $ref into the lowered NamedSchema so e.g. tic-tac-toe's
+    # `row` parameter picks up `Coordinate.examples = [1]`.
+    if isinstance(lowered, NamedSchemaRef):
+        target = by_name.get(lowered.name)
+        if target is not None:
+            return list(target.examples)
+    return []
 
 
 def _build_body(body: SpecBody | Reference | None, index: SchemaIndex, spec: OpenAPI) -> RequestBody | None:

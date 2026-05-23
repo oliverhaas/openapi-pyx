@@ -77,6 +77,7 @@ def _lower(schema: Schema | Reference, index: SchemaIndex) -> IRSchema:  # noqa:
             format=schema.schema_format,
             nullable=nullable,
             enum_values=_literal_enum_values(schema),
+            constraints=_primitive_constraints(schema),
         )
 
     return FreeFormSchema(nullable=nullable)
@@ -153,6 +154,28 @@ def _split_nullable(type_field: object) -> tuple[bool, tuple[DataType, ...]]:
         types = tuple(t for t in type_field if isinstance(t, DataType))
         return (DataType.NULL in types), tuple(t for t in types if t != DataType.NULL)
     return False, ()
+
+
+_CONSTRAINT_FIELDS: dict[str, str] = {
+    "minimum": "ge",
+    "maximum": "le",
+    "exclusiveMinimum": "gt",
+    "exclusiveMaximum": "lt",
+    "minLength": "min_length",
+    "maxLength": "max_length",
+    "pattern": "pattern",
+    "multipleOf": "multiple_of",
+}
+
+
+def _primitive_constraints(schema: Schema) -> dict[str, object]:
+    """Map JSON Schema validation keywords onto Pydantic Field kwargs."""
+    out: dict[str, object] = {}
+    for spec_attr, pydantic_arg in _CONSTRAINT_FIELDS.items():
+        value = getattr(schema, spec_attr, None)
+        if value is not None:
+            out[pydantic_arg] = value
+    return out
 
 
 def _literal_enum_values(schema: Schema) -> list[object]:

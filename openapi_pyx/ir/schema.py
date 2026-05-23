@@ -17,6 +17,8 @@ class PrimitiveSchema:
     format: str | None = None
     nullable: bool = False
     enum_values: list[Any] = field(default_factory=list)
+    # Pydantic Field kwargs keyed by their pydantic name (e.g. {"ge": 1, "le": 3, "max_length": 256}).
+    constraints: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

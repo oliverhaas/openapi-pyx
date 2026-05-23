@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from openapi_pyx.ir.schema import Schema  # noqa: TC001
 
@@ -21,6 +22,7 @@ class Parameter:
     required: bool
     schema: Schema
     description: str | None = None
+    examples: list[Any] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

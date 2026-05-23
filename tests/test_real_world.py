@@ -90,19 +90,18 @@ def test_tictactoe_aliases_carry_description_and_enum_constraints(tmp_path: Path
     pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_alias_client")
     from tictactoe_alias_client import models  # noqa: PLC0415
 
-    # `Mark` is `Annotated[Literal[".", "X", "O"], Field(description=...)]`.
-    # Pydantic exposes the Literal narrowing and the description when validating against it.
+    # `Mark` is `class Mark(RootModel[Literal[...]])`; `__doc__` carries the spec description.
+    assert models.Mark.__doc__ is not None
+    assert "board square" in models.Mark.__doc__.lower()
 
-    class Wrapper(models.BaseModel):
-        mark: models.Mark
+    # Numeric constraints on `coordinate` (`minimum: 1, maximum: 3`) reach Pydantic via Field args.
+    schema = models.Coordinate.model_json_schema()
+    assert schema["minimum"] == 1
+    assert schema["maximum"] == 3
+    assert schema["examples"] == [1]
 
-    schema = Wrapper.model_json_schema()
-    mark_schema = schema["properties"]["mark"]
-    if "$ref" in mark_schema:  # Pydantic may $defs-extract
-        ref_name = mark_schema["$ref"].rsplit("/", 1)[-1]
-        mark_schema = schema["$defs"][ref_name]
-    assert mark_schema["enum"] == [".", "X", "O"]
-    assert "board square" in mark_schema["description"].lower()
+    # `Mark.model_validate(value)` enforces the Literal enum at runtime.
+    assert models.Mark.model_validate("X").root == "X"
 
 
 @pytest.mark.asyncio
@@ -117,7 +116,8 @@ async def test_tictactoe_get_square_sends_path_params(tmp_path: Path):
     http = httpx.AsyncClient(transport=transport, base_url="https://api.example.com")
     async with pkg.Client(base_url="https://api.example.com", http=http) as client:
         mark = await client.gameplay.get_square(row=2, column=3)
-    assert mark == "X"
+    # `Mark` is a `RootModel[Literal[...]]` so the wire value is unwrapped via `.root`.
+    assert mark.root == "X"
 
 
 def test_webhook_example_emits_models_only_package(tmp_path: Path):

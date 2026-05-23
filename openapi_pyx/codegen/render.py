@@ -64,10 +64,7 @@ def _render_stmt(stmt: object) -> str:
     if isinstance(stmt, RootClient):
         return _render_root_client(stmt)
     if isinstance(stmt, TypeAlias):
-        line = f"{stmt.name} = {stmt.value}"
-        if stmt.docstring:
-            return f"{line}\n{_docstring(stmt.docstring)}"
-        return line
+        return f"{stmt.name} = {stmt.value}"
     if isinstance(stmt, Assign):
         return f"{stmt.target} = {stmt.value}"
     raise TypeError(f"Unknown stmt: {type(stmt).__name__}")

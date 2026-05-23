@@ -88,7 +88,7 @@ def _emit_named_schema(ns: NamedSchema, flags: _ModuleImports) -> Stmt:
         flags.annotated = True
         flags.field = True
         rendered = _wrap_with_field(rendered, ns, constraints)
-    return TypeAlias(name=cls_name, value=rendered, docstring=ns.description)
+    return TypeAlias(name=cls_name, value=rendered)
 
 
 def _wrap_with_field(rendered: str, ns: NamedSchema, constraints: dict[str, object]) -> str:

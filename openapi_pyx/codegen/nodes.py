@@ -57,7 +57,6 @@ class TypeAlias:
 
     name: str
     value: str
-    docstring: str | None = None  # PEP 258 trailing string, picked up by IDEs/Sphinx
 
 
 @dataclass(frozen=True, slots=True)

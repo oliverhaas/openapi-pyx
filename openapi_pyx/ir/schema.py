@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -30,6 +30,7 @@ class SchemaField:
     schema: Schema
     required: bool
     description: str | None = None
+    examples: list[Any] = field(default_factory=list)
     serialization_alias: str | None = None  # set when name != original property name
 
 

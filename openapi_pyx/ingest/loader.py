@@ -26,7 +26,10 @@ def load_spec(path: Path) -> OpenAPI:
     if not isinstance(version, str) or not version.startswith("3.1"):
         raise LoadError(f"Only OpenAPI 3.1 is supported; got openapi={version!r}")
 
-    _strip_examples(raw)
+    _strip_example_refs(raw)
+    components = raw.get("components")
+    if isinstance(components, dict):
+        components.pop("examples", None)
 
     try:
         return OpenAPI.model_validate(raw)
@@ -34,17 +37,26 @@ def load_spec(path: Path) -> OpenAPI:
         raise LoadError(f"Spec failed validation: {exc}") from exc
 
 
-def _strip_examples(node: Any) -> None:  # noqa: ANN401
-    """Drop `example` and `examples` fields recursively.
+def _strip_example_refs(node: Any) -> None:  # noqa: ANN401
+    """Drop OpenAPI Examples Objects but keep JSON Schema 2020-12 examples.
 
-    They're documentation only, and their `$ref`s into `#/components/examples/`
-    would otherwise need separate handling we don't care about for codegen.
+    Both fields are called `examples`, but the shapes differ. JSON Schema's
+    `examples` is a list of inline values (useful for `Field(examples=...)`).
+    OpenAPI's Examples Object is a `{name: ExampleObject|$ref}` map pointing
+    at `#/components/examples/...`, which we don't resolve. The
+    `components.examples` section is the ref target pool, so drop that too.
     """
     if isinstance(node, dict):
-        node.pop("example", None)
-        node.pop("examples", None)
+        # OpenAPI Examples Object: dict-shaped `examples`. JSON Schema: list-shaped.
+        if isinstance(node.get("examples"), dict):
+            node.pop("examples", None)
+        # GitHub's spec uses `example: {$ref: "#/components/examples/..."}` in places.
+        # That's a ref disguised as a literal; drop it.
+        example_value = node.get("example")
+        if isinstance(example_value, dict) and "$ref" in example_value:
+            node.pop("example", None)
         for v in node.values():
-            _strip_examples(v)
+            _strip_example_refs(v)
     elif isinstance(node, list):
         for item in node:
-            _strip_examples(item)
+            _strip_example_refs(item)

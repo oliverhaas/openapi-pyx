@@ -130,6 +130,28 @@ def test_render_field_combines_default_alias_and_description():
     assert "Field(None, alias=\"x-id\", description='External id.')" in src
 
 
+def test_render_field_with_examples_emits_examples_arg():
+    mod = Module(
+        docstring=None,
+        imports=[ImportFrom("pydantic", ["BaseModel", "Field"])],
+        body=[
+            PydanticModel(
+                name="Pet",
+                fields=[
+                    ModelField(
+                        name="id",
+                        type_expr=TypeExpr("int"),
+                        required=True,
+                        examples=[1, 42, 100],
+                    ),
+                ],
+            ),
+        ],
+    )
+    src = render_module(mod)
+    assert "Field(examples=[1, 42, 100])" in src
+
+
 def test_render_multi_line_docstring_uses_pep257_layout():
     mod = Module(
         docstring="Summary line.\n\nLonger description spanning\nmultiple lines.",

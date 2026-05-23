@@ -1,7 +1,7 @@
 """Typed IR for emitted Python source."""
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +34,7 @@ class ModelField:
     required: bool
     default: str | None = None  # rendered as-is, e.g. "None" or '"open"'
     description: str | None = None
+    examples: list[Any] = field(default_factory=list)
     serialization_alias: str | None = None  # set when name was sanitized away from original
 
 

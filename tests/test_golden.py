@@ -22,6 +22,7 @@ GOLDEN_CASES = [
     ("wildcard_2xx", FIXTURES / "edge" / "wildcard_2xx.yaml"),
     ("sanitized_field", FIXTURES / "edge" / "sanitized_field.yaml"),
     ("optional_union_with_null", FIXTURES / "edge" / "optional_union_with_null.yaml"),
+    ("field_examples", FIXTURES / "edge" / "field_examples.yaml"),
 ]
 
 

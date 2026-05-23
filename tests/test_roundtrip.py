@@ -61,6 +61,19 @@ def test_sanitized_field_model_round_trips_alias_and_python_name(tmp_path: Path)
     assert '"for":7' in dumped
 
 
+def test_schema_examples_render_into_field_examples(tmp_path: Path):
+    models = _load_generated_models(
+        tmp_path,
+        FIXTURES / "edge" / "field_examples.yaml",
+        "field_examples_client",
+    )
+    schema = models.Pet.model_json_schema()
+    assert schema["properties"]["id"]["examples"] == [1, 42, 100]
+    assert schema["properties"]["name"]["examples"] == ["Rex", "Whiskers"]
+    # Deprecated singular `example` is normalized into the `examples` list.
+    assert schema["properties"]["legacy"]["examples"] == ["legacy-value"]
+
+
 def test_optional_union_with_null_member_accepts_string_and_null(tmp_path: Path):
     models = _load_generated_models(
         tmp_path,

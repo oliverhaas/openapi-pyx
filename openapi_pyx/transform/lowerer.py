@@ -118,6 +118,7 @@ def _lower_object(schema: Schema, index: SchemaIndex, *, nullable: bool) -> Obje
                 schema=_lower(prop_schema, index),
                 required=prop_name in required,
                 description=getattr(prop_schema, "description", None),
+                examples=_examples_of(prop_schema),
             ),
         )
 
@@ -142,6 +143,16 @@ def _split_nullable(type_field: object) -> tuple[bool, tuple[DataType, ...]]:
         types = tuple(t for t in type_field if isinstance(t, DataType))
         return (DataType.NULL in types), tuple(t for t in types if t != DataType.NULL)
     return False, ()
+
+
+def _examples_of(schema: Schema | Reference) -> list[object]:
+    """Extract JSON Schema 2020-12 `examples` list (or wrap deprecated singular `example`)."""
+    if isinstance(schema, Reference):
+        return []
+    examples = list(schema.examples or [])
+    if not examples and schema.example is not None:
+        examples = [schema.example]
+    return examples
 
 
 def _ref_to_named(ref: str, index: SchemaIndex) -> NamedSchemaRef:

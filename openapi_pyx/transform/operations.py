@@ -59,6 +59,7 @@ def _build_operation(  # noqa: PLR0913
         http_method=method,
         path=path,
         summary=op.summary,
+        description=op.description,
         parameters=[_build_param(p, index) for p in merged],
         request_body=_build_body(op.requestBody, index, spec),
         response=_build_response(op, index, spec),

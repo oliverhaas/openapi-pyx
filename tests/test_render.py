@@ -82,3 +82,62 @@ def test_render_field_with_serialization_alias():
     )
     src = render_module(mod)
     assert 'Field(alias="x-id")' in src or 'alias="x-id"' in src
+
+
+def test_render_field_with_description_emits_field_call():
+    mod = Module(
+        docstring=None,
+        imports=[ImportFrom("pydantic", ["BaseModel", "Field"])],
+        body=[
+            PydanticModel(
+                name="Pet",
+                fields=[
+                    ModelField(
+                        name="id",
+                        type_expr=TypeExpr("int"),
+                        required=True,
+                        description="Stable pet identifier.",
+                    ),
+                ],
+            ),
+        ],
+    )
+    src = render_module(mod)
+    assert "Field(description='Stable pet identifier.')" in src
+
+
+def test_render_field_combines_default_alias_and_description():
+    mod = Module(
+        docstring=None,
+        imports=[ImportFrom("pydantic", ["BaseModel", "Field"])],
+        body=[
+            PydanticModel(
+                name="X",
+                fields=[
+                    ModelField(
+                        name="x_id",
+                        type_expr=TypeExpr("int | None"),
+                        required=False,
+                        default="None",
+                        serialization_alias="x-id",
+                        description="External id.",
+                    ),
+                ],
+            ),
+        ],
+    )
+    src = render_module(mod)
+    assert "Field(None, alias=\"x-id\", description='External id.')" in src
+
+
+def test_render_multi_line_docstring_uses_pep257_layout():
+    mod = Module(
+        docstring="Summary line.\n\nLonger description spanning\nmultiple lines.",
+        imports=[],
+        body=[],
+    )
+    src = render_module(mod)
+    assert '"""Summary line.\n' in src
+    assert "Longer description spanning" in src
+    assert "multiple lines." in src
+    assert src.count('"""') == 2  # exactly one opening, one closing

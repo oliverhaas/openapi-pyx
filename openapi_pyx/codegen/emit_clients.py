@@ -114,8 +114,13 @@ def _emit_method(op: Operation) -> AsyncMethod:
         body_param=body_param,
         body_required=body_required,
         response_type=response_type,
-        docstring=op.summary,
+        docstring=_combine_summary_description(op.summary, op.description),
     )
+
+
+def _combine_summary_description(summary: str | None, description: str | None) -> str | None:
+    parts = [p for p in (summary, description) if p]
+    return "\n\n".join(parts) if parts else None
 
 
 def _method_uses_any(m: AsyncMethod) -> bool:

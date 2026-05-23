@@ -20,12 +20,18 @@ from openapi_pyx.codegen.nodes import (
 INDENT = "    "
 
 
-def _docstring(text: str) -> str:
-    """Wrap arbitrary text as a `\"\"\"...\"\"\"` docstring, escaping embedded triple quotes."""
+def _docstring(text: str, indent: str = "") -> str:
+    """Wrap `text` as a `\"\"\"...\"\"\"` docstring at `indent` level, multi-line aware."""
     escaped = text.replace('"""', '\\"\\"\\"')
     if escaped.endswith('"'):
         escaped += " "
-    return f'"""{escaped}"""'
+    if "\n" not in escaped:
+        return f'{indent}"""{escaped}"""'
+    lines = escaped.split("\n")
+    rendered = [f'{indent}"""{lines[0]}']
+    rendered.extend(f"{indent}{line}" if line else "" for line in lines[1:])
+    rendered.append(f'{indent}"""')
+    return "\n".join(rendered)
 
 
 def render_module(mod: Module) -> str:
@@ -67,7 +73,7 @@ def _render_stmt(stmt: object) -> str:
 def _render_pydantic_model(m: PydanticModel) -> str:
     lines = [f"class {m.name}({m.base}):"]
     if m.docstring:
-        lines.append(f"{INDENT}{_docstring(m.docstring)}")
+        lines.append(_docstring(m.docstring, INDENT))
     config_args: list[str] = []
     if m.extra is not None:
         config_args.append(f'extra="{m.extra}"')
@@ -84,19 +90,29 @@ def _render_pydantic_model(m: PydanticModel) -> str:
 
 def _render_model_field(f: ModelField) -> str:
     base = f"{f.name}: {f.type_expr.rendered}"
-    if f.serialization_alias is not None and f.default is not None:
-        return f'{base} = Field({f.default}, alias="{f.serialization_alias}")'
-    if f.serialization_alias is not None:
-        return f'{base} = Field(alias="{f.serialization_alias}")'
+    if f.serialization_alias is None and not f.description:
+        if f.default is not None:
+            return f"{base} = {f.default}"
+        return base
+    args: list[str] = []
     if f.default is not None:
-        return f"{base} = {f.default}"
-    return base
+        args.append(f.default)
+    if f.serialization_alias is not None:
+        args.append(f'alias="{f.serialization_alias}"')
+    if f.description:
+        args.append(f"description={_string_literal(f.description)}")
+    return f"{base} = Field({', '.join(args)})"
+
+
+def _string_literal(text: str) -> str:
+    """Render `text` as a Python string literal that round-trips through ruff format."""
+    return repr(text)
 
 
 def _render_client_class(c: ClientClass) -> str:
     lines = [f"class {c.name}:"]
     if c.docstring:
-        lines.append(f"{INDENT}{_docstring(c.docstring)}")
+        lines.append(_docstring(c.docstring, INDENT))
     lines.append(f"{INDENT}def __init__(self, http: httpx.AsyncClient) -> None:")
     lines.append(f"{INDENT * 2}self._http = http")
     for method in c.methods:
@@ -137,7 +153,7 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
     indent = INDENT * 2
     lines: list[str] = []
     if m.docstring:
-        lines.append(f"{indent}{_docstring(m.docstring)}")
+        lines.append(_docstring(m.docstring, indent))
 
     url_expr = _render_url_expr(m.url_template, m.path_params)
 
@@ -208,7 +224,7 @@ def _render_root_client(c: RootClient) -> str:
         f"class {c.name}:",
     ]
     if c.docstring:
-        lines.append(f"{INDENT}{_docstring(c.docstring)}")
+        lines.append(_docstring(c.docstring, INDENT))
     lines.extend(
         [
             f"{INDENT}def __init__(self, base_url: str, *, http: httpx.AsyncClient | None = None) -> None:",

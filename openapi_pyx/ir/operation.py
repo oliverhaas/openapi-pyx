@@ -42,6 +42,7 @@ class Operation:
     http_method: str  # "get", "post", "put", "patch", "delete"
     path: str
     summary: str | None
+    description: str | None
     parameters: list[Parameter]
     request_body: RequestBody | None
     response: Response | None  # None when no 2xx body or only no-content responses

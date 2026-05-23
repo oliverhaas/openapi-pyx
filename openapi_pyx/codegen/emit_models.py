@@ -120,7 +120,7 @@ def _emit_object_fields(obj: ObjectSchema) -> tuple[list[ModelField], _FieldImpo
             type_expr = f"{type_expr} | None"
 
         serialization_alias = f.name if py_name != f.name else None
-        if serialization_alias is not None:
+        if serialization_alias is not None or f.description:
             imports.field = True
 
         out.append(

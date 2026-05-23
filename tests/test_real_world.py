@@ -69,6 +69,15 @@ def test_tictactoe_generates_client_with_path_level_param_refs(tmp_path: Path):
     assert hasattr(models, "Coordinate")
 
 
+def test_tictactoe_method_docstring_includes_summary_and_description(tmp_path: Path):
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_doc_client")
+
+    get_board = pkg.Client(base_url="https://api.example.com").gameplay.get_board
+    assert get_board.__doc__ is not None
+    assert "Get the whole board" in get_board.__doc__  # summary
+    assert "Retrieves the current state of the board" in get_board.__doc__  # description
+
+
 @pytest.mark.asyncio
 async def test_tictactoe_get_square_sends_path_params(tmp_path: Path):
     pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_live_client")

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from openapi_pyx.codegen.emit_models import _render_type
 from openapi_pyx.codegen.nodes import (
     Assign,
     AsyncMethod,
@@ -16,6 +15,7 @@ from openapi_pyx.codegen.nodes import (
     Stmt,
     TypeExpr,
 )
+from openapi_pyx.codegen.types import render_type as _render_type
 from openapi_pyx.ir.operation import Operation, ParamLocation
 from openapi_pyx.ir.schema import (
     ArraySchema,

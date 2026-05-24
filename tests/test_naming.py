@@ -17,7 +17,9 @@ def test_method_name_handles_python_keywords():
 def test_model_name_pascalcase_and_keyword_safe():
     assert model_name("pet") == "Pet"
     assert model_name("pet_owner") == "PetOwner"
-    assert model_name("class") == "Class_"
+    # `class` is a Python keyword but `Class` (PascalCase) is a valid class name; no suffix needed.
+    assert model_name("class") == "Class"
+    assert model_name("license") == "License"
 
 
 def test_model_name_handles_pascal_keyword_literals():

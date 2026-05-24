@@ -28,12 +28,18 @@ def method_name(name: str) -> str:
 
 
 def model_name(name: str) -> str:
-    """PascalCase model name with a trailing `_` if it would collide with a Python keyword or builtin."""
+    """PascalCase model name with a trailing `_` if it collides with a Python keyword.
+
+    PascalCase class names that happen to lowercase to a builtin (`License`, `Type`,
+    `Format`, `Id`) don't actually shadow anything important in the module scope,
+    so we keep them bare. Only the literal keyword cases (`None`, `True`, `False`)
+    need disambiguation.
+    """
     parts = snake_case(name).split("_")
     pascal = "".join(p.capitalize() for p in parts if p)
     if not pascal or pascal[0].isdigit():
         pascal = f"_{pascal}"
-    if pascal in _PYTHON_RESERVED or pascal.lower() in _PYTHON_RESERVED:
+    if pascal in _PYTHON_RESERVED:
         return f"{pascal}_"
     return pascal
 

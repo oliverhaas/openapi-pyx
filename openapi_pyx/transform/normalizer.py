@@ -15,19 +15,28 @@ if TYPE_CHECKING:
 def compose_allof(schema: Schema, index: SchemaIndex) -> Schema:
     """Return a Schema with `allOf` merged into top-level properties/required.
 
-    Refs inside `allOf` are followed and themselves composed. Non-object branches are
-    a runtime error (we do not currently merge primitive constraints).
+    Refs inside `allOf` are followed and themselves composed. When every branch is
+    object-shaped (or carries no type), branches are merged property-by-property and
+    the result is typed as `object`. When at least one branch is primitive-shaped, the
+    allOf is treated as a refinement of that primitive: the first non-object branch is
+    returned and other branches' metadata is discarded. Real specs use the latter
+    pattern to attach descriptions/constraints to a referenced primitive type.
     """
     if not schema.allOf:
         return schema
 
+    composed_branches = [compose_allof(_follow(b, index), index) for b in schema.allOf]
+    primitive_branch = next(
+        (b for b in composed_branches if b.type not in (None, DataType.OBJECT) and not b.properties),
+        None,
+    )
+    if primitive_branch is not None:
+        # Primitive refinement; return the primitive branch and drop the rest.
+        return primitive_branch.model_copy(update={"allOf": None})
+
     merged_props: dict[str, Schema | Reference] = {}
     merged_required: set[str] = set()
-    for branch in schema.allOf:
-        resolved = _follow(branch, index)
-        composed = compose_allof(resolved, index)
-        if composed.type not in (None, DataType.OBJECT) and composed.properties is None:
-            raise ValueError("openapi-pyx v0.1 only supports object branches in allOf")
+    for composed in composed_branches:
         merged_props.update(composed.properties or {})
         merged_required.update(composed.required or ())
 

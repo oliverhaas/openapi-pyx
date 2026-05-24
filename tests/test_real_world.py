@@ -35,6 +35,9 @@ GITHUB_SPEC_URL = (
 EXPECTED_GITHUB_MIN_MODELS = 800
 EXPECTED_GITHUB_MIN_SUB_CLIENTS = 40
 
+ASANA_SPEC_URL = "https://raw.githubusercontent.com/asana/openapi/master/defs/asana_oas.yaml"
+EXPECTED_ASANA_MIN_SUB_CLIENTS = 40
+
 
 def _load_package(tmp_path: Path, spec: Path, package_name: str) -> ModuleType:
     out = tmp_path / package_name
@@ -293,3 +296,26 @@ def test_github_rest_api_spec_generates_and_imports(tmp_path: Path):
 
     model_names = [n for n in dir(models) if not n.startswith("_") and n[:1].isupper()]
     assert len(model_names) >= EXPECTED_GITHUB_MIN_MODELS
+
+
+@pytest.mark.skipif(
+    os.environ.get("OPENAPI_PYX_TEST_ASANA") != "1",
+    reason="Set OPENAPI_PYX_TEST_ASANA=1 to enable; downloads the ~3 MB Asana OpenAPI 3.0 spec.",
+)
+def test_asana_3_0_spec_generates_and_imports(tmp_path: Path):
+    """End-to-end against an OpenAPI 3.0 spec.
+
+    Asana exercises the 3.0-specific normalizations: `nullable: true` widening,
+    top-level `$ref` schema aliases, response keys as ints, primitive-typed allOf
+    branches, and unsupported regex backreferences.
+    """
+    spec_path = tmp_path / "asana.yaml"
+    urllib.request.urlretrieve(ASANA_SPEC_URL, spec_path)  # noqa: S310
+
+    pkg = _load_package(tmp_path, spec_path, "asana_client_e2e")
+    client = pkg.Client(base_url="https://app.asana.com/api/1.0")
+    sub_clients = [a for a in dir(client) if not a.startswith("_")]
+    assert len(sub_clients) >= EXPECTED_ASANA_MIN_SUB_CLIENTS
+
+    sync_client = pkg.SyncClient(base_url="https://app.asana.com/api/1.0")
+    assert len([a for a in dir(sync_client) if not a.startswith("_")]) >= EXPECTED_ASANA_MIN_SUB_CLIENTS

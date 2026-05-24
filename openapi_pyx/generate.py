@@ -4,21 +4,23 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+import yaml
 
 from openapi_pyx.codegen.emit_clients import emit_client_module
 from openapi_pyx.codegen.emit_root import emit_root_module
 from openapi_pyx.codegen.format import format_directory
 from openapi_pyx.codegen.render import render_module
-from openapi_pyx.ingest.loader import load_spec
+from openapi_pyx.ingest.loader import load_normalized_raw, load_spec
 from openapi_pyx.naming import model_name, module_name
 from openapi_pyx.transform.lowerer import lower_components
 from openapi_pyx.transform.operations import build_document
 from openapi_pyx.transform.resolver import build_schema_index
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from openapi_pyx.codegen.nodes import Module
     from openapi_pyx.ir.document import TagGroup
 
@@ -164,15 +166,25 @@ class ApiError(Exception):
 
 
 def _run_datamodel_codegen(spec_path: Path, out_path: Path) -> None:
-    """Shell out to `datamodel-codegen` to emit Pydantic v2 models from the spec."""
-    args = [
-        sys.executable,
-        "-m",
-        "datamodel_code_generator",
-        "--input",
-        str(spec_path),
-        "--output",
-        str(out_path),
-        *_DATAMODEL_CODEGEN_FLAGS,
-    ]
-    subprocess.run(args, check=True, capture_output=True, text=True)  # noqa: S603
+    """Shell out to `datamodel-codegen` to emit Pydantic v2 models.
+
+    We pass dmcg a normalized copy of the spec (3.0→3.1, ref aliases inlined,
+    unsupported regex patterns stripped) so the models it emits are compatible
+    with what the rest of our pipeline produces.
+    """
+    normalized = load_normalized_raw(spec_path)
+    with tempfile.TemporaryDirectory() as tmp:
+        # Keep the original basename so dmcg's `# filename:` header doesn't expose tempdir cruft.
+        normalized_path = Path(tmp) / spec_path.name
+        normalized_path.write_text(yaml.safe_dump(normalized, sort_keys=False), encoding="utf-8")
+        args = [
+            sys.executable,
+            "-m",
+            "datamodel_code_generator",
+            "--input",
+            str(normalized_path),
+            "--output",
+            str(out_path),
+            *_DATAMODEL_CODEGEN_FLAGS,
+        ]
+        subprocess.run(args, check=True, capture_output=True, text=True)  # noqa: S603

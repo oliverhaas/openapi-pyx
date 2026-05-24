@@ -28,7 +28,7 @@ def test_mutually_recursive_both_marked():
     assert {"A", "B"} <= index.recursive_names
 
 
-def test_rejects_top_level_ref_alias_in_components(tmp_path):
+def test_inlines_top_level_ref_alias_in_components(tmp_path):
     p = tmp_path / "alias.yaml"
     p.write_text(
         "openapi: 3.1.0\n"
@@ -42,8 +42,12 @@ def test_rejects_top_level_ref_alias_in_components(tmp_path):
         '    Alias: { $ref: "#/components/schemas/Real" }\n',
     )
     spec = load_spec(p)
-    with pytest.raises(ResolveError, match="top-level"):
-        build_schema_index(spec)
+    index = build_schema_index(spec)
+    # The loader inlines `Alias: {$ref: Real}` into Real's content, so Alias
+    # is a real schema with the same properties.
+    assert "Real" in index.schemas
+    assert "Alias" in index.schemas
+    assert index.schemas["Alias"].properties == index.schemas["Real"].properties
 
 
 def test_rejects_non_components_ref(tmp_path):

@@ -40,14 +40,17 @@ def test_list_pets_has_keyword_only_limit_with_default_none():
     assert "*, limit: int | None = None" in src
 
 
-def test_show_pet_by_id_uses_fstring_path():
+def test_show_pet_by_id_uses_fstring_path_with_quote():
     src = _emit_pets_client()
-    assert 'await self._http.get(f"/pets/{pet_id}"' in src
+    # Path params are URL-encoded via urllib.parse.quote.
+    assert 'await self._http.get(f"/pets/{quote(str(pet_id), safe="")}"' in src
+    assert "from urllib.parse import quote" in src
 
 
-def test_create_pet_posts_body_json():
+def test_create_pet_posts_body_via_typeadapter():
     src = _emit_pets_client()
-    assert "body.model_dump_json" in src
+    # Bodies are serialized through the per-type TypeAdapter so non-BaseModel bodies (Literal, Annotated aliases) work.
+    assert ".dump_json(body, by_alias=True, exclude_none=True)" in src
 
 
 def test_emits_typeadapter_for_response_models():

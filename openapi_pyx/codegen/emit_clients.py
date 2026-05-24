@@ -38,9 +38,10 @@ def emit_client_module(group: TagGroup) -> Module:
     referenced_models = sorted(_collect_model_refs(group.operations))
 
     body: list[Stmt] = []
-    # Per-response TypeAdapter pre-instantiated at module scope.
-    adapter_targets = sorted({m.response_type.rendered for m in methods if m.response_type})
-    for tgt in adapter_targets:
+    # Per-type TypeAdapter pre-instantiated at module scope, for both bodies (dump) and responses (validate).
+    adapter_targets: set[str] = {m.response_type.rendered for m in methods if m.response_type}
+    adapter_targets.update(m.body_type.rendered for m in methods if m.body_type)
+    for tgt in sorted(adapter_targets):
         safe = "".join(c if c.isalnum() else "_" for c in tgt)
         body.append(Assign(target=f"_Adapter_{safe}", value=f"TypeAdapter({tgt})"))
 
@@ -53,6 +54,8 @@ def emit_client_module(group: TagGroup) -> Module:
     needs_any = any("Any" in tgt for tgt in adapter_targets) or any(_method_uses_any(m) for m in methods)
     if needs_any:
         imports.insert(0, ImportFrom("typing", ["Any"]))
+    if any(m.path_params for m in methods):
+        imports.insert(0, ImportFrom("urllib.parse", ["quote"]))
     if referenced_models:
         imports.append(ImportFrom("..models", referenced_models))
 
@@ -91,12 +94,15 @@ def _emit_method(op: Operation) -> AsyncMethod:
 
     body_param: str | None = None
     body_required = True  # Default True; only relevant when body_param is set
+    body_type: TypeExpr | None = None
     if op.request_body is not None:
         body_required = op.request_body.required
-        body_type = _render_param_type(op.request_body.schema, optional=not body_required)
+        body_type_str = _render_param_type(op.request_body.schema, optional=False)
+        body_param_type = f"{body_type_str} | None" if not body_required else body_type_str
         body_default = None if body_required else "None"
-        sig_params.append(Param("body", TypeExpr(body_type), default=body_default, keyword_only=True))
+        sig_params.append(Param("body", TypeExpr(body_param_type), default=body_default, keyword_only=True))
         body_param = "body"
+        body_type = TypeExpr(body_type_str)
 
     response_type: TypeExpr | None = None
     return_type: TypeExpr | None = None
@@ -116,6 +122,7 @@ def _emit_method(op: Operation) -> AsyncMethod:
         header_params=header_params,
         body_param=body_param,
         body_required=body_required,
+        body_type=body_type,
         response_type=response_type,
         docstring=_build_docstring(op.summary, op.description, param_docs),
     )

@@ -107,6 +107,28 @@ def test_tictactoe_aliases_carry_description_and_enum_constraints(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_tictactoe_put_square_serializes_literal_body(tmp_path: Path):
+    """Mark is `type Mark = Annotated[Literal[...], Field(...)]`, not a BaseModel.
+
+    Bodies of this shape used to crash at runtime via `body.model_dump_json(...)`.
+    TypeAdapter handles them.
+    """
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_put_client")
+
+    sent: list[bytes] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request.content)
+        return httpx.Response(200, json={"winner": ".", "board": [[".", ".", "."]] * 3})
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.AsyncClient(transport=transport, base_url="https://api.example.com")
+    async with pkg.Client(base_url="https://api.example.com", http=http) as client:
+        await client.gameplay.put_square(row=1, column=2, body="X")
+    assert sent[0] == b'"X"'
+
+
+@pytest.mark.asyncio
 async def test_tictactoe_get_square_sends_path_params(tmp_path: Path):
     pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_live_client")
 

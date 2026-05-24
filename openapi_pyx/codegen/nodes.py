@@ -79,6 +79,7 @@ class AsyncMethod:
     header_params: list[tuple[str, str]]
     body_param: str | None  # python local name of the body parameter (or None)
     body_required: bool  # whether body is required (always True if body_param is None)
+    body_type: TypeExpr | None  # type used to construct a `TypeAdapter` for serialization
     response_type: TypeExpr | None  # type used to construct a `TypeAdapter` and validate
     docstring: str | None = None
 

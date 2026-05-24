@@ -22,6 +22,7 @@ def emit_root_module(doc: Document) -> Module:
         for t in doc.tags
     ]
     imports: list[Import | ImportFrom] = [
+        Import("ssl"),
         Import("httpx"),
         *[ImportFrom(sc.cls_module, [sc.cls_name]) for sc in sub_clients],
     ]

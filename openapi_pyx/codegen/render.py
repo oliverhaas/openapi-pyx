@@ -188,16 +188,17 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
     if have_headers:
         base_args.append("headers=headers")
 
-    if m.body_param and not m.body_required:
-        # Emit a conditional based on whether body was provided.
-        lines.append(f"{indent}if {m.body_param} is not None:")
-        with_body = [*base_args, f"content={m.body_param}.model_dump_json(by_alias=True, exclude_none=True)"]
-        lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(with_body)})")
-        lines.append(f"{indent}else:")
-        lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(base_args)})")
-    elif m.body_param:
-        full_args = [*base_args, f"content={m.body_param}.model_dump_json(by_alias=True, exclude_none=True)"]
-        lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(full_args)})")
+    if m.body_param and m.body_type is not None:
+        body_dump = f"{_adapter_name(m.body_type)}.dump_json({m.body_param}, by_alias=True, exclude_none=True)"
+        if not m.body_required:
+            lines.append(f"{indent}if {m.body_param} is not None:")
+            with_body = [*base_args, f"content={body_dump}"]
+            lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(with_body)})")
+            lines.append(f"{indent}else:")
+            lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(base_args)})")
+        else:
+            full_args = [*base_args, f"content={body_dump}"]
+            lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(full_args)})")
     else:
         lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(base_args)})")
 
@@ -214,7 +215,8 @@ def _render_url_expr(template: str, path_params: list[tuple[str, str]]) -> str:
         return f'"{template}"'
     out = template
     for placeholder, local in path_params:
-        out = out.replace("{" + placeholder + "}", "{" + local + "}")
+        # Percent-encode each segment so spaces, slashes, and other reserved chars don't break the URL.
+        out = out.replace("{" + placeholder + "}", "{quote(str(" + local + '), safe="")}')
     return f'f"{out}"'
 
 
@@ -224,15 +226,36 @@ def _adapter_name(t: TypeExpr) -> str:
 
 
 def _render_root_client(c: RootClient) -> str:
-    lines = [
-        f"class {c.name}:",
-    ]
+    lines = [f"class {c.name}:"]
     if c.docstring:
         lines.append(_docstring(c.docstring, INDENT))
+    init_sig = (
+        f"{INDENT}def __init__("
+        "self, base_url: str, *, "
+        "http: httpx.AsyncClient | None = None, "
+        "timeout: httpx.Timeout | float | None = None, "
+        "headers: dict[str, str] | None = None, "
+        "cookies: dict[str, str] | None = None, "
+        "verify: bool | str | ssl.SSLContext = True, "
+        "follow_redirects: bool = False, "
+        "httpx_args: dict[str, object] | None = None,"
+        ") -> None:"
+    )
+    construct_http = (
+        f"{INDENT * 2}self._http = http or httpx.AsyncClient(\n"
+        f"{INDENT * 3}base_url=base_url,\n"
+        f"{INDENT * 3}timeout=timeout if timeout is not None else httpx.Timeout(5.0),\n"
+        f"{INDENT * 3}headers=headers or {{}},\n"
+        f"{INDENT * 3}cookies=cookies or {{}},\n"
+        f"{INDENT * 3}verify=verify,\n"
+        f"{INDENT * 3}follow_redirects=follow_redirects,\n"
+        f"{INDENT * 3}**(httpx_args or {{}}),\n"
+        f"{INDENT * 2})"
+    )
     lines.extend(
         [
-            f"{INDENT}def __init__(self, base_url: str, *, http: httpx.AsyncClient | None = None) -> None:",
-            f"{INDENT * 2}self._http = http or httpx.AsyncClient(base_url=base_url)",
+            init_sig,
+            construct_http,
             *[f"{INDENT * 2}self.{sc.attr_name} = {sc.cls_name}(self._http)" for sc in c.sub_clients],
             "",
             f'{INDENT}async def __aenter__(self) -> "{c.name}":',

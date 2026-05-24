@@ -45,6 +45,7 @@ def test_client_class_holds_async_methods():
         header_params=[],
         body_param=None,
         body_required=True,
+        body_type=None,
         response_type=TypeExpr("Pets"),
     )
     klass = ClientClass(name="PetsClient", methods=[method])

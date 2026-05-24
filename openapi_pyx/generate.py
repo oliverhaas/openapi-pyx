@@ -6,8 +6,6 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-import unasync
-
 from openapi_pyx.codegen.emit_clients import emit_client_module
 from openapi_pyx.codegen.emit_root import emit_root_module
 from openapi_pyx.codegen.format import format_directory
@@ -20,6 +18,9 @@ from openapi_pyx.transform.resolver import build_schema_index
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from openapi_pyx.codegen.nodes import Module
+    from openapi_pyx.ir.document import TagGroup
 
 
 _DATAMODEL_CODEGEN_FLAGS = (
@@ -65,21 +66,24 @@ def generate_client(spec_path: Path, out_dir: Path) -> None:
 
     (out_dir / "runtime.py").write_text(_RUNTIME_MODULE)
     (out_dir / "clients").mkdir(exist_ok=True)
-    (out_dir / "client.py").write_text(render_module(emit_root_module(doc)))
+    root_mod = emit_root_module(doc)
+    (out_dir / "client.py").write_text(render_module(root_mod))
 
-    for tag in doc.tags:
-        path = out_dir / "clients" / f"{module_name(tag.name)}.py"
-        path.write_text(render_module(emit_client_module(tag)))
+    tag_modules = [(tag, emit_client_module(tag)) for tag in doc.tags]
+    for tag, mod in tag_modules:
+        (out_dir / "clients" / f"{module_name(tag.name)}.py").write_text(render_module(mod))
 
-    (out_dir / "clients" / "__init__.py").write_text(
+    clients_init = (
         "\n".join(
             f"from .{module_name(t.name)} import {model_name(t.name)}Client as {model_name(t.name)}Client"
             for t in doc.tags
         )
-        + "\n",
+        + "\n"
     )
+    (out_dir / "clients" / "__init__.py").write_text(clients_init)
 
-    _emit_sync_tree(out_dir, doc.tags)
+    # Sync tree: same IR, re-rendered with sync=True.
+    _emit_sync_tree(out_dir, root_mod, tag_modules, clients_init)
 
     (out_dir / "__init__.py").write_text(
         "from ._sync.client import Client as SyncClient\n"
@@ -91,34 +95,27 @@ def generate_client(spec_path: Path, out_dir: Path) -> None:
     format_directory(out_dir)
 
 
-def _emit_sync_tree(out_dir: Path, tags: list) -> None:  # noqa: ARG001 (tags used via paths)
-    """Mirror `clients/` and `client.py` into `_sync/` via unasync."""
+def _emit_sync_tree(
+    out_dir: Path,
+    root_mod: Module,
+    tag_modules: list[tuple[TagGroup, Module]],
+    clients_init: str,
+) -> None:
+    """Mirror `clients/` and `client.py` into `_sync/`, re-rendering each Module IR with sync=True."""
     sync_dir = out_dir / "_sync"
     (sync_dir / "clients").mkdir(parents=True, exist_ok=True)
 
-    # Stub modules so `from ..models` / `from ..runtime` resolve inside _sync/clients/.
+    # Stub modules so relative imports inside the sync clients resolve.
     (sync_dir / "runtime.py").write_text(
         'from ..runtime import ApiError, Response\n\n__all__ = ["ApiError", "Response"]\n',
     )
     (sync_dir / "models.py").write_text("from ..models import *  # noqa: F403\n")
     (sync_dir / "__init__.py").write_text("")
+    (sync_dir / "clients" / "__init__.py").write_text(clients_init)
 
-    async_files = [
-        str(out_dir / "client.py"),
-        *(str(p) for p in (out_dir / "clients").glob("*.py")),
-    ]
-    rules = [
-        unasync.Rule(
-            fromdir=f"{out_dir}/",
-            todir=f"{sync_dir}/",
-            additional_replacements={
-                "AsyncClient": "Client",
-                # httpx.AsyncClient.aclose() → httpx.Client.close()
-                "aclose": "close",
-            },
-        ),
-    ]
-    unasync.unasync_files(async_files, rules)
+    (sync_dir / "client.py").write_text(render_module(root_mod, sync=True))
+    for tag, mod in tag_modules:
+        (sync_dir / "clients" / f"{module_name(tag.name)}.py").write_text(render_module(mod, sync=True))
 
 
 _RUNTIME_MODULE = '''\

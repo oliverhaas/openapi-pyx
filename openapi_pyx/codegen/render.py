@@ -34,35 +34,35 @@ def _docstring(text: str, indent: str = "") -> str:
     return "\n".join(rendered)
 
 
-def render_module(mod: Module) -> str:
+def render_module(mod: Module, *, sync: bool = False) -> str:
     out: list[str] = []
     if mod.docstring is not None:
         out.append(_docstring(mod.docstring))
         out.append("")
-    out.extend(_render_import(imp) for imp in mod.imports)
+    out.extend(_render_import(imp, sync=sync) for imp in mod.imports)
     if mod.imports:
         out.append("")
     for i, stmt in enumerate(mod.body):
-        out.append(_render_stmt(stmt))
+        out.append(_render_stmt(stmt, sync=sync))
         if i != len(mod.body) - 1:
             out.append("")
             out.append("")
     return "\n".join(out) + ("\n" if out else "")
 
 
-def _render_import(imp: Import | ImportFrom) -> str:
+def _render_import(imp: Import | ImportFrom, *, sync: bool = False) -> str:  # noqa: ARG001
     if isinstance(imp, Import):
         return f"import {imp.name}" + (f" as {imp.alias}" if imp.alias else "")
     return f"from {imp.module} import {', '.join(imp.names)}"
 
 
-def _render_stmt(stmt: object) -> str:
+def _render_stmt(stmt: object, *, sync: bool = False) -> str:
     if isinstance(stmt, PydanticModel):
         return _render_pydantic_model(stmt)
     if isinstance(stmt, ClientClass):
-        return _render_client_class(stmt)
+        return _render_client_class(stmt, sync=sync)
     if isinstance(stmt, RootClient):
-        return _render_root_client(stmt)
+        return _render_root_client(stmt, sync=sync)
     if isinstance(stmt, TypeAlias):
         return f"{stmt.name} = {stmt.value}"
     if isinstance(stmt, Assign):
@@ -113,23 +113,25 @@ def _string_literal(text: str) -> str:
     return repr(text)
 
 
-def _render_client_class(c: ClientClass) -> str:
+def _render_client_class(c: ClientClass, *, sync: bool = False) -> str:
+    httpx_client = "httpx.Client" if sync else "httpx.AsyncClient"
     lines = [f"class {c.name}:"]
     if c.docstring:
         lines.append(_docstring(c.docstring, INDENT))
-    lines.append(f"{INDENT}def __init__(self, http: httpx.AsyncClient) -> None:")
+    lines.append(f"{INDENT}def __init__(self, http: {httpx_client}) -> None:")
     lines.append(f"{INDENT * 2}self._http = http")
     for method in c.methods:
         lines.append("")
-        lines.append(_render_async_method(method))
+        lines.append(_render_method(method, sync=sync))
     return "\n".join(lines)
 
 
-def _render_async_method(m: AsyncMethod) -> str:
+def _render_method(m: AsyncMethod, *, sync: bool = False) -> str:
     sig_params = _render_params(m.params)
     return_anno = f" -> {m.return_type.rendered}" if m.return_type else " -> None"
-    head = f"{INDENT}async def {m.name}({sig_params}){return_anno}:"
-    body = _render_method_body(m)
+    keyword = "def " if sync else "async def "
+    head = f"{INDENT}{keyword}{m.name}({sig_params}){return_anno}:"
+    body = _render_method_body(m, sync=sync)
     return head + "\n" + body
 
 
@@ -153,7 +155,7 @@ def _render_param(p: Param) -> str:
     return out
 
 
-def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
+def _render_method_body(m: AsyncMethod, *, sync: bool = False) -> str:  # noqa: C901, PLR0912
     indent = INDENT * 2
     lines: list[str] = []
     if m.docstring:
@@ -187,19 +189,20 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
     if have_headers:
         base_args.append("headers=headers")
 
+    awaited = "" if sync else "await "
     if m.body_param and m.body_type is not None:
         body_dump = f"{_adapter_name(m.body_type)}.dump_json({m.body_param}, by_alias=True, exclude_none=True)"
         if not m.body_required:
             lines.append(f"{indent}if {m.body_param} is not None:")
             with_body = [*base_args, f"content={body_dump}"]
-            lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(with_body)})")
+            lines.append(f"{indent}{INDENT}resp = {awaited}self._http.{m.http_method}({', '.join(with_body)})")
             lines.append(f"{indent}else:")
-            lines.append(f"{indent}{INDENT}resp = await self._http.{m.http_method}({', '.join(base_args)})")
+            lines.append(f"{indent}{INDENT}resp = {awaited}self._http.{m.http_method}({', '.join(base_args)})")
         else:
             full_args = [*base_args, f"content={body_dump}"]
-            lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(full_args)})")
+            lines.append(f"{indent}resp = {awaited}self._http.{m.http_method}({', '.join(full_args)})")
     else:
-        lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(base_args)})")
+        lines.append(f"{indent}resp = {awaited}self._http.{m.http_method}({', '.join(base_args)})")
 
     if m.variant == "detailed":
         lines.extend(_render_detailed_response(m, indent))
@@ -289,14 +292,20 @@ def _adapter_name(t: TypeExpr) -> str:
     return f"_Adapter_{safe}"
 
 
-def _render_root_client(c: RootClient) -> str:
+def _render_root_client(c: RootClient, *, sync: bool = False) -> str:
+    httpx_client = "httpx.Client" if sync else "httpx.AsyncClient"
+    enter, exit_ = ("__enter__", "__exit__") if sync else ("__aenter__", "__aexit__")
+    aclose = "close" if sync else "aclose"
+    async_kw = "" if sync else "async "
+    await_kw = "" if sync else "await "
+
     lines = [f"class {c.name}:"]
     if c.docstring:
         lines.append(_docstring(c.docstring, INDENT))
     init_sig = (
         f"{INDENT}def __init__("
         "self, base_url: str, *, "
-        "http: httpx.AsyncClient | None = None, "
+        f"http: {httpx_client} | None = None, "
         "timeout: httpx.Timeout | float | None = None, "
         "headers: dict[str, str] | None = None, "
         "cookies: dict[str, str] | None = None, "
@@ -306,7 +315,7 @@ def _render_root_client(c: RootClient) -> str:
         ") -> None:"
     )
     construct_http = (
-        f"{INDENT * 2}self._http = http or httpx.AsyncClient(\n"
+        f"{INDENT * 2}self._http = http or {httpx_client}(\n"
         f"{INDENT * 3}base_url=base_url,\n"
         f"{INDENT * 3}timeout=timeout if timeout is not None else httpx.Timeout(5.0),\n"
         f"{INDENT * 3}headers=headers or {{}},\n"
@@ -322,11 +331,11 @@ def _render_root_client(c: RootClient) -> str:
             construct_http,
             *[f"{INDENT * 2}self.{sc.attr_name} = {sc.cls_name}(self._http)" for sc in c.sub_clients],
             "",
-            f'{INDENT}async def __aenter__(self) -> "{c.name}":',
+            f'{INDENT}{async_kw}def {enter}(self) -> "{c.name}":',
             f"{INDENT * 2}return self",
             "",
-            f"{INDENT}async def __aexit__(self, *_exc: object) -> None:",
-            f"{INDENT * 2}await self._http.aclose()",
+            f"{INDENT}{async_kw}def {exit_}(self, *_exc: object) -> None:",
+            f"{INDENT * 2}{await_kw}self._http.{aclose}()",
         ],
     )
     return "\n".join(lines)

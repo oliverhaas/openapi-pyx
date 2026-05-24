@@ -35,6 +35,7 @@ dependencies = [
   "PyYAML>=6",
   "ruff>=0.6",
   "typer>=0.15",
+  "unasync>=0.6.0",
 ]
 
 [project.urls]

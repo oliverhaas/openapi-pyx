@@ -106,6 +106,39 @@ def test_tictactoe_aliases_carry_description_and_enum_constraints(tmp_path: Path
     assert TypeAdapter(models.Mark).validate_python("X") == "X"
 
 
+def test_tictactoe_sync_client_round_trips(tmp_path: Path):
+    """The `_sync` tree (unasync'd from the async tree) exposes a working `SyncClient`."""
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_sync_client")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json="X")
+
+    transport = httpx.HTTPTransport()  # not used; we override via http=
+    sync_transport = httpx.MockTransport(handler)
+    http = httpx.Client(transport=sync_transport, base_url="https://api.example.com")
+    with pkg.SyncClient(base_url="https://api.example.com", http=http) as client:
+        mark = client.gameplay.get_square(row=1, column=2)
+    assert mark == "X"
+    _ = transport  # silence unused
+
+
+def test_tictactoe_sync_detailed_returns_response_wrapper(tmp_path: Path):
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_sync_detailed")
+
+    payload = {"winner": ".", "board": [[".", ".", "."]] * 3}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload, headers={"X-Trace-Id": "sync42"})
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.Client(transport=transport, base_url="https://api.example.com")
+    with pkg.SyncClient(base_url="https://api.example.com", http=http) as client:
+        wrapped = client.gameplay.get_board_detailed()
+    assert wrapped.status_code == 200
+    assert wrapped.headers["x-trace-id"] == "sync42"
+    assert wrapped.parsed.winner == "."
+
+
 @pytest.mark.asyncio
 async def test_tictactoe_get_square_raises_api_error_on_non_2xx(tmp_path: Path):
     pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_error_client")

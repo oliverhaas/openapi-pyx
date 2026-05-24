@@ -6,6 +6,8 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+import unasync
+
 from openapi_pyx.codegen.emit_clients import emit_client_module
 from openapi_pyx.codegen.emit_root import emit_root_module
 from openapi_pyx.codegen.format import format_directory
@@ -76,12 +78,47 @@ def generate_client(spec_path: Path, out_dir: Path) -> None:
         )
         + "\n",
     )
+
+    _emit_sync_tree(out_dir, doc.tags)
+
     (out_dir / "__init__.py").write_text(
-        "from .client import Client\nfrom .runtime import ApiError, Response\n\n"
-        '__all__ = ["ApiError", "Client", "Response"]\n',
+        "from ._sync.client import Client as SyncClient\n"
+        "from .client import Client\n"
+        "from .runtime import ApiError, Response\n\n"
+        '__all__ = ["ApiError", "Client", "Response", "SyncClient"]\n',
     )
 
     format_directory(out_dir)
+
+
+def _emit_sync_tree(out_dir: Path, tags: list) -> None:  # noqa: ARG001 (tags used via paths)
+    """Mirror `clients/` and `client.py` into `_sync/` via unasync."""
+    sync_dir = out_dir / "_sync"
+    (sync_dir / "clients").mkdir(parents=True, exist_ok=True)
+
+    # Stub modules so `from ..models` / `from ..runtime` resolve inside _sync/clients/.
+    (sync_dir / "runtime.py").write_text(
+        'from ..runtime import ApiError, Response\n\n__all__ = ["ApiError", "Response"]\n',
+    )
+    (sync_dir / "models.py").write_text("from ..models import *  # noqa: F403\n")
+    (sync_dir / "__init__.py").write_text("")
+
+    async_files = [
+        str(out_dir / "client.py"),
+        *(str(p) for p in (out_dir / "clients").glob("*.py")),
+    ]
+    rules = [
+        unasync.Rule(
+            fromdir=f"{out_dir}/",
+            todir=f"{sync_dir}/",
+            additional_replacements={
+                "AsyncClient": "Client",
+                # httpx.AsyncClient.aclose() → httpx.Client.close()
+                "aclose": "close",
+            },
+        ),
+    ]
+    unasync.unasync_files(async_files, rules)
 
 
 _RUNTIME_MODULE = '''\

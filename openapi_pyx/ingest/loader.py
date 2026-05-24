@@ -10,6 +10,8 @@ from typing import Any
 import yaml
 from openapi_pydantic.v3.v3_1 import OpenAPI
 
+from openapi_pyx.ingest._convert_3_0 import convert_3_0_to_3_1
+
 
 class LoadError(ValueError):
     """Raised when a spec cannot be loaded or fails validation."""
@@ -25,12 +27,15 @@ def load_spec(path: Path) -> OpenAPI:
 
 
 def load_normalized_raw(path: Path) -> dict[str, Any]:
-    """Load the spec as a dict, applying every load-time normalization.
+    """Load the spec as a v3.1-shaped dict, applying every load-time normalization.
 
-    3.0 specs are rewritten to 3.1 shape; ref-only schema aliases are inlined;
-    `pattern` fields that pydantic-core can't compile are dropped; OpenAPI Examples
-    Objects (the named-map kind) are stripped. The returned dict is also fed to
-    `datamodel-codegen` so it sees the same normalizations as our pipeline does.
+    3.0 specs go through a typed conversion (parse as `v3_0.OpenAPI`, walk and convert
+    each Schema, emit as 3.1-shaped dict). Then a few orthogonal raw-dict workarounds
+    run regardless of input version: YAML int response keys are stringified, ref-only
+    schema aliases are inlined, `pattern` fields that pydantic-core can't compile are
+    dropped, OpenAPI Examples Objects (the named-map kind) are stripped. The returned
+    dict is also fed to `datamodel-codegen` so it sees the same normalizations as our
+    pipeline does.
     """
     text = path.read_text(encoding="utf-8")
     raw = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
@@ -41,9 +46,15 @@ def load_normalized_raw(path: Path) -> dict[str, Any]:
     version = raw.get("openapi", "")
     if not isinstance(version, str):
         raise LoadError(f"Spec has non-string `openapi` field: {version!r}")
+
+    # Stringify before any typed parse; v3.0/v3.1 models reject int response keys.
+    _stringify_response_keys(raw)
+
     if version.startswith("3.0"):
-        _normalize_3_0_to_3_1(raw)
-        raw["openapi"] = "3.1.0"
+        try:
+            raw = convert_3_0_to_3_1(raw)
+        except Exception as exc:
+            raise LoadError(f"3.0 spec failed structural validation: {exc}") from exc
     elif not version.startswith("3.1"):
         raise LoadError(f"Only OpenAPI 3.0 and 3.1 are supported; got openapi={version!r}")
 
@@ -56,62 +67,17 @@ def load_normalized_raw(path: Path) -> dict[str, Any]:
     return raw
 
 
-def _normalize_3_0_to_3_1(node: Any) -> None:  # noqa: ANN401
-    """In-place rewrite of 3.0-specific constructs into 3.1 form.
-
-    Three Schema-level changes:
-    - `nullable: true` becomes `type: [<existing>, "null"]` (or `anyOf` with a null branch
-      when there's no single `type` to widen).
-    - `exclusiveMinimum: true` (bool) plus `minimum: <n>` becomes `exclusiveMinimum: <n>`.
-      Same for `exclusiveMaximum`. 3.1 dropped the boolean form.
-    - The boolean-only form `exclusiveMinimum: false` is dropped (it was a no-op flag).
-
-    Plus one document-level normalization for YAML-quirks that real 3.0 specs frequently hit:
-    - Response status codes loaded as `int` (e.g. `200:` unquoted) become string keys.
-    """
+def _stringify_response_keys(node: Any) -> None:  # noqa: ANN401
+    """Recursively rewrite `responses: {200: ...}` (YAML int) to `responses: {"200": ...}`."""
     if isinstance(node, dict):
-        _normalize_nullable(node)
-        _normalize_exclusive_bound(node, bool_key="exclusiveMinimum", value_key="minimum")
-        _normalize_exclusive_bound(node, bool_key="exclusiveMaximum", value_key="maximum")
-        _stringify_response_keys(node)
+        responses = node.get("responses")
+        if isinstance(responses, dict) and not all(isinstance(k, str) for k in responses):
+            node["responses"] = {str(k): v for k, v in responses.items()}
         for v in node.values():
-            _normalize_3_0_to_3_1(v)
+            _stringify_response_keys(v)
     elif isinstance(node, list):
         for item in node:
-            _normalize_3_0_to_3_1(item)
-
-
-def _stringify_response_keys(node: dict[str, Any]) -> None:
-    """If `responses` has int keys (YAML parsed `200:` as int 200), stringify them in place."""
-    responses = node.get("responses")
-    if not isinstance(responses, dict):
-        return
-    if all(isinstance(k, str) for k in responses):
-        return
-    node["responses"] = {str(k): v for k, v in responses.items()}
-
-
-def _normalize_nullable(node: dict[str, Any]) -> None:
-    if node.pop("nullable", None) is not True:
-        return
-    existing_type = node.get("type")
-    if isinstance(existing_type, str):
-        node["type"] = [existing_type, "null"]
-    elif "type" not in node:
-        # No declared type yet a nullable flag: widen via anyOf so the null branch is reachable.
-        existing = {k: node.pop(k) for k in list(node) if k not in {"description", "title", "deprecated"}}
-        if existing:
-            node["anyOf"] = [existing, {"type": "null"}]
-
-
-def _normalize_exclusive_bound(node: dict[str, Any], *, bool_key: str, value_key: str) -> None:
-    flag = node.get(bool_key)
-    if not isinstance(flag, bool):
-        return  # already numeric (3.1 form) or absent
-    if flag and isinstance(node.get(value_key), int | float):
-        node[bool_key] = node[value_key]
-    else:
-        node.pop(bool_key, None)
+            _stringify_response_keys(item)
 
 
 _COMPONENT_SCHEMA_PREFIX = "#/components/schemas/"

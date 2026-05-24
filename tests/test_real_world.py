@@ -107,6 +107,83 @@ def test_tictactoe_aliases_carry_description_and_enum_constraints(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_tictactoe_get_square_raises_api_error_on_non_2xx(tmp_path: Path):
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_error_client")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, content=b"server exploded")
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.AsyncClient(transport=transport, base_url="https://api.example.com")
+    async with pkg.Client(base_url="https://api.example.com", http=http) as client:
+        with pytest.raises(pkg.ApiError) as exc_info:
+            await client.gameplay.get_square(row=1, column=1)
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.content == b"server exploded"
+
+
+@pytest.mark.asyncio
+async def test_tictactoe_get_board_detailed_returns_response_wrapper(tmp_path: Path):
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_detailed_client")
+
+    payload = {"winner": ".", "board": [[".", ".", "."]] * 3}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload, headers={"X-Trace-Id": "abc123"})
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.AsyncClient(transport=transport, base_url="https://api.example.com")
+    async with pkg.Client(base_url="https://api.example.com", http=http) as client:
+        wrapped = await client.gameplay.get_board_detailed()
+    assert wrapped.status_code == 200
+    assert wrapped.headers["x-trace-id"] == "abc123"
+    assert wrapped.parsed is not None
+    assert wrapped.parsed.winner == "."
+
+
+@pytest.mark.asyncio
+async def test_tictactoe_detailed_does_not_raise_on_non_2xx(tmp_path: Path):
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_detailed_err_client")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, content=b"nope")
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.AsyncClient(transport=transport, base_url="https://api.example.com")
+    async with pkg.Client(base_url="https://api.example.com", http=http) as client:
+        wrapped = await client.gameplay.get_board_detailed()
+    assert wrapped.status_code == 404
+    assert wrapped.parsed is None
+    assert wrapped.content == b"nope"
+
+
+@pytest.mark.asyncio
+async def test_tictactoe_client_accepts_timeout_kwarg(tmp_path: Path):
+    """Client gained httpx config passthrough; verify the timeout kwarg lands."""
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_timeout_client")
+    client = pkg.Client(base_url="https://api.example.com", timeout=42.0)
+    assert client._http.timeout.read == 42.0  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_tictactoe_path_params_url_encoded(tmp_path: Path):
+    pkg = _load_package(tmp_path, FIXTURES / "tictactoe.yaml", "tictactoe_encode_client")
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json="X")
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.AsyncClient(transport=transport, base_url="https://api.example.com")
+    async with pkg.Client(base_url="https://api.example.com", http=http) as client:
+        # An int passes through cleanly; the encoding logic itself is exercised on weirder inputs in unit tests.
+        await client.gameplay.get_square(row=1, column=2)
+    assert seen[0].url.path == "/board/1/2"
+
+
+@pytest.mark.asyncio
 async def test_tictactoe_put_square_serializes_literal_body(tmp_path: Path):
     """Mark is `type Mark = Annotated[Literal[...], Field(...)]`, not a BaseModel.
 

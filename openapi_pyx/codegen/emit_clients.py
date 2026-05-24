@@ -12,6 +12,7 @@ from openapi_pyx.codegen.nodes import (
     ImportFrom,
     Module,
     Param,
+    ResponseBranch,
     Stmt,
     TypeExpr,
 )
@@ -28,21 +29,25 @@ from openapi_pyx.ir.schema import (
 from openapi_pyx.naming import method_name, model_name
 
 if TYPE_CHECKING:
-    from openapi_pyx.ir.document import TagGroup
+    from openapi_pyx.ir.operation import ResponseBranch as IRBranch
+
+_STATUS_CODE_LENGTH = 3
 
 
 def emit_client_module(group: TagGroup) -> Module:
     """Build a Module IR for the given tag group."""
-    methods = [_emit_method(op) for op in group.operations]
+    methods: list[AsyncMethod] = []
+    for op in group.operations:
+        methods.append(_emit_method(op, variant="simple"))
+        methods.append(_emit_method(op, variant="detailed"))
 
     referenced_models = sorted(_collect_model_refs(group.operations))
 
     body: list[Stmt] = []
     # Per-type TypeAdapter pre-instantiated at module scope, for both bodies (dump) and responses (validate).
-    adapter_targets: set[str] = {m.response_type.rendered for m in methods if m.response_type}
-    adapter_targets.update(m.body_type.rendered for m in methods if m.body_type)
+    adapter_targets = _collect_adapter_targets(methods)
     for tgt in sorted(adapter_targets):
-        safe = "".join(c if c.isalnum() else "_" for c in tgt)
+        safe = _adapter_safe(tgt)
         body.append(Assign(target=f"_Adapter_{safe}", value=f"TypeAdapter({tgt})"))
 
     body.append(ClientClass(name=f"{_tag_class_prefix(group.name)}Client", methods=methods))
@@ -50,6 +55,7 @@ def emit_client_module(group: TagGroup) -> Module:
     imports: list[Import | ImportFrom] = [
         Import("httpx"),
         ImportFrom("pydantic", ["TypeAdapter"]),
+        ImportFrom("..runtime", ["ApiError", "Response"]),
     ]
     needs_any = any("Any" in tgt for tgt in adapter_targets) or any(_method_uses_any(m) for m in methods)
     if needs_any:
@@ -70,8 +76,25 @@ def _tag_class_prefix(tag: str) -> str:
     return model_name(tag)
 
 
-def _emit_method(op: Operation) -> AsyncMethod:
+def _adapter_safe(rendered: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in rendered)
+
+
+def _collect_adapter_targets(methods: list[AsyncMethod]) -> set[str]:
+    targets: set[str] = set()
+    for m in methods:
+        if m.body_type:
+            targets.add(m.body_type.rendered)
+        for branch in m.branches:
+            if branch.type_expr is not None:
+                targets.add(branch.type_expr)
+    return targets
+
+
+def _emit_method(op: Operation, *, variant: str) -> AsyncMethod:
     py_method_name = method_name(op.operation_id)
+    if variant == "detailed":
+        py_method_name = f"{py_method_name}_detailed"
     query_params: list[tuple[str, str]] = []
     path_params: list[tuple[str, str]] = []
     header_params: list[tuple[str, str]] = []
@@ -93,7 +116,7 @@ def _emit_method(op: Operation) -> AsyncMethod:
             header_params.append((p.name, local))
 
     body_param: str | None = None
-    body_required = True  # Default True; only relevant when body_param is set
+    body_required = True
     body_type: TypeExpr | None = None
     if op.request_body is not None:
         body_required = op.request_body.required
@@ -104,12 +127,21 @@ def _emit_method(op: Operation) -> AsyncMethod:
         body_param = "body"
         body_type = TypeExpr(body_type_str)
 
+    branches = _render_branches(op.branches)
+
     response_type: TypeExpr | None = None
     return_type: TypeExpr | None = None
-    if op.response is not None:
-        rendered = _render_param_type(op.response.schema, optional=False)
-        response_type = TypeExpr(rendered)
-        return_type = TypeExpr(rendered)
+    parsed_union_type: str | None = None
+    if variant == "simple":
+        if op.response is not None:
+            rendered = _render_param_type(op.response.schema, optional=False)
+            response_type = TypeExpr(rendered)
+            # If any other 2xx branch has no body, the simple form may return None.
+            success_no_body = any(b.matcher and _branch_is_2xx(b) and b.adapter is None for b in branches)
+            return_type = TypeExpr(f"{rendered} | None" if success_no_body else rendered)
+    else:  # detailed
+        parsed_union_type = _build_parsed_union(branches)
+        return_type = TypeExpr(f"Response[{parsed_union_type}]")
 
     return AsyncMethod(
         name=py_method_name,
@@ -124,8 +156,50 @@ def _emit_method(op: Operation) -> AsyncMethod:
         body_required=body_required,
         body_type=body_type,
         response_type=response_type,
+        variant=variant,  # ty: ignore[invalid-argument-type]
+        branches=branches,
+        parsed_union_type=parsed_union_type,
         docstring=_build_docstring(op.summary, op.description, param_docs),
     )
+
+
+def _render_branches(ir_branches: list[IRBranch]) -> list[ResponseBranch]:
+    """Compile each spec status code into a (matcher_expr, adapter_name, type_expr) triple.
+
+    Order matters at runtime: exact codes first, then `2XX` wildcards, then `default` last.
+    """
+    exact: list[ResponseBranch] = []
+    wildcards: list[ResponseBranch] = []
+    default: list[ResponseBranch] = []
+    for b in ir_branches:
+        status = b.status_code
+        type_expr = _render_type(b.schema) if b.schema is not None else None
+        adapter = f"_Adapter_{_adapter_safe(type_expr)}" if type_expr else None
+        if status.lower() == "default":
+            default.append(ResponseBranch(matcher="", adapter=adapter, type_expr=type_expr, is_default=True))
+        elif len(status) == _STATUS_CODE_LENGTH and status[0] in "12345" and status[1:].upper() == "XX":
+            low = int(status[0]) * 100
+            matcher = f"{low} <= resp.status_code < {low + 100}"
+            wildcards.append(ResponseBranch(matcher=matcher, adapter=adapter, type_expr=type_expr))
+        elif status.isdigit():
+            exact.append(
+                ResponseBranch(matcher=f"resp.status_code == {int(status)}", adapter=adapter, type_expr=type_expr),
+            )
+    return [*exact, *wildcards, *default]
+
+
+def _branch_is_2xx(b: ResponseBranch) -> bool:
+    if "200 <= resp.status_code < 300" in b.matcher:
+        return True
+    if "resp.status_code == " in b.matcher:
+        return 200 <= int(b.matcher.rsplit(" ", 1)[-1]) < 300  # noqa: PLR2004
+    return False
+
+
+def _build_parsed_union(branches: list[ResponseBranch]) -> str:
+    """Union of all documented body schemas plus None (for undocumented or no-body responses)."""
+    types = sorted({b.type_expr for b in branches if b.type_expr})
+    return " | ".join([*types, "None"]) if types else "None"
 
 
 def _build_docstring(
@@ -187,6 +261,11 @@ def _collect_model_refs(ops: list[Operation]) -> set[str]:  # noqa: C901
             walk(p.schema)
         if op.request_body is not None:
             walk(op.request_body.schema)
-        if op.response is not None:
-            walk(op.response.schema)
+        for br in op.branches:
+            if br.schema is not None:
+                walk(br.schema)
     return out
+
+
+if TYPE_CHECKING:
+    from openapi_pyx.ir.document import TagGroup

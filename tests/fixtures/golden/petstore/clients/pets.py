@@ -6,6 +6,7 @@ import httpx
 from pydantic import TypeAdapter
 
 from ..models import Pet, Pets
+from ..runtime import ApiError, Response
 
 _Adapter_Pet = TypeAdapter(Pet)
 
@@ -23,8 +24,28 @@ class PetsClient:
         if limit is not None:
             params["limit"] = limit
         resp = await self._http.get("/pets", params=params)
-        resp.raise_for_status()
-        return _Adapter_Pets.validate_json(resp.content)
+        if resp.status_code == 200:
+            return _Adapter_Pets.validate_json(resp.content)
+        parsed: object | None = None
+        raise ApiError(resp.status_code, resp.content, dict(resp.headers), parsed)
+
+    async def list_pets_detailed(
+        self, *, limit: int | None = None
+    ) -> Response[Pets | None]:
+        """List all pets"""
+        params: dict[str, object] = {}
+        if limit is not None:
+            params["limit"] = limit
+        resp = await self._http.get("/pets", params=params)
+        parsed: Pets | None = None
+        if resp.status_code == 200:
+            parsed = _Adapter_Pets.validate_json(resp.content)
+        return Response(
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+            content=resp.content,
+            parsed=parsed,
+        )
 
     async def create_pet(self, *, body: Pet) -> None:
         """Create a pet"""
@@ -34,10 +55,44 @@ class PetsClient:
             headers=headers,
             content=_Adapter_Pet.dump_json(body, by_alias=True, exclude_none=True),
         )
-        resp.raise_for_status()
+        if resp.status_code == 201:
+            return None
+        parsed: object | None = None
+        raise ApiError(resp.status_code, resp.content, dict(resp.headers), parsed)
+
+    async def create_pet_detailed(self, *, body: Pet) -> Response[None]:
+        """Create a pet"""
+        headers = {"Content-Type": "application/json"}
+        resp = await self._http.post(
+            "/pets",
+            headers=headers,
+            content=_Adapter_Pet.dump_json(body, by_alias=True, exclude_none=True),
+        )
+        parsed: None = None
+        return Response(
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+            content=resp.content,
+            parsed=parsed,
+        )
 
     async def show_pet_by_id(self, *, pet_id: str) -> Pet:
         """Info for a specific pet"""
         resp = await self._http.get(f"/pets/{quote(str(pet_id), safe='')}")
-        resp.raise_for_status()
-        return _Adapter_Pet.validate_json(resp.content)
+        if resp.status_code == 200:
+            return _Adapter_Pet.validate_json(resp.content)
+        parsed: object | None = None
+        raise ApiError(resp.status_code, resp.content, dict(resp.headers), parsed)
+
+    async def show_pet_by_id_detailed(self, *, pet_id: str) -> Response[Pet | None]:
+        """Info for a specific pet"""
+        resp = await self._http.get(f"/pets/{quote(str(pet_id), safe='')}")
+        parsed: Pet | None = None
+        if resp.status_code == 200:
+            parsed = _Adapter_Pet.validate_json(resp.content)
+        return Response(
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+            content=resp.content,
+            parsed=parsed,
+        )

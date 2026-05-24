@@ -70,5 +70,5 @@ def test_optional_body_emits_runtime_conditional():
     assert "body: Pet | None = None" in src
     # The renderer must guard the content= arg behind an `if body is not None:` check
     assert "if body is not None:" in src
-    # And there must be a fallback call without the content= arg
-    assert src.count('await self._http.put("/pets"') == 2
+    # Two http.put call sites (with/without body), doubled across simple + detailed variants.
+    assert src.count('await self._http.put("/pets"') == 4

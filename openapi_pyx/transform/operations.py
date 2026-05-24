@@ -9,7 +9,7 @@ from openapi_pydantic.v3.v3_1 import RequestBody as SpecBody
 from openapi_pydantic.v3.v3_1 import Response as SpecResponse
 
 from openapi_pyx.ir.document import Document, TagGroup
-from openapi_pyx.ir.operation import Operation, Parameter, ParamLocation, RequestBody, Response
+from openapi_pyx.ir.operation import Operation, Parameter, ParamLocation, RequestBody, Response, ResponseBranch
 from openapi_pyx.ir.schema import NamedSchema, NamedSchemaRef
 from openapi_pyx.transform.lowerer import _examples_of, _lower  # internal use OK
 from openapi_pyx.transform.resolver import SchemaIndex  # noqa: TC001
@@ -65,6 +65,7 @@ def _build_operation(  # noqa: PLR0913
         parameters=[_build_param(p, index, by_name) for p in merged],
         request_body=_build_body(op.requestBody, index, spec),
         response=_build_response(op, index, spec),
+        branches=_build_branches(op, index, spec),
     )
 
 
@@ -150,6 +151,19 @@ def _build_response(op: SpecOp, index: SchemaIndex, spec: OpenAPI) -> Response |
             content_type="application/json",
         )
     return None
+
+
+def _build_branches(op: SpecOp, index: SchemaIndex, spec: OpenAPI) -> list[ResponseBranch]:
+    """All documented responses (2xx, errors, default), in spec declaration order."""
+    if not op.responses:
+        return []
+    out: list[ResponseBranch] = []
+    for status, resp in op.responses.items():
+        resolved = _resolve_response(resp, spec)
+        media = (resolved.content or {}).get("application/json")
+        schema = _lower(media.media_type_schema, index) if media and media.media_type_schema is not None else None
+        out.append(ResponseBranch(status_code=status, schema=schema))
+    return out
 
 
 def _resolve_parameter(param: SpecParam | Reference, spec: OpenAPI) -> SpecParam:

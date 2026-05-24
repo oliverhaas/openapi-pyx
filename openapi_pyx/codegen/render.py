@@ -181,7 +181,6 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
             lines.append(f'{indent}headers = {{"Content-Type": "application/json"}}')
             have_headers = True
 
-    # Build the call. If body is optional, the content= arg is conditional.
     base_args = [url_expr]
     if m.query_params:
         base_args.append("params=params")
@@ -202,12 +201,77 @@ def _render_method_body(m: AsyncMethod) -> str:  # noqa: C901, PLR0912
     else:
         lines.append(f"{indent}resp = await self._http.{m.http_method}({', '.join(base_args)})")
 
-    lines.append(f"{indent}resp.raise_for_status()")
-
-    if m.response_type is not None:
-        lines.append(f"{indent}return {_adapter_name(m.response_type)}.validate_json(resp.content)")
+    if m.variant == "detailed":
+        lines.extend(_render_detailed_response(m, indent))
+    else:
+        lines.extend(_render_simple_response(m, indent))
 
     return "\n".join(lines)
+
+
+def _render_simple_response(m: AsyncMethod, indent: str) -> list[str]:
+    """Emit the 2xx-or-raise dispatch for the simple variant."""
+    lines: list[str] = []
+    success_branches = [b for b in m.branches if not b.is_default and _is_2xx_matcher(b.matcher)]
+    error_branches = [b for b in m.branches if b not in success_branches]
+
+    for b in success_branches:
+        lines.append(f"{indent}if {b.matcher}:")
+        if b.adapter and m.response_type is not None:
+            lines.append(f"{indent}{INDENT}return {b.adapter}.validate_json(resp.content)")
+        else:
+            lines.append(f"{indent}{INDENT}return None")
+
+    if not success_branches and m.response_type is None:
+        # No documented 2xx at all; raise on anything non-2xx.
+        lines.append(f"{indent}if 200 <= resp.status_code < 300:")
+        lines.append(f"{indent}{INDENT}return None")
+
+    # Error dispatch: try to parse documented error bodies, then raise.
+    lines.append(f"{indent}parsed: object | None = None")
+    for b in error_branches:
+        if b.is_default:
+            if b.adapter:
+                lines.append(f"{indent}if True:  # default")
+                lines.append(f"{indent}{INDENT}parsed = {b.adapter}.validate_json(resp.content)")
+            continue
+        if b.adapter is None:
+            continue
+        lines.append(f"{indent}if {b.matcher}:")
+        lines.append(f"{indent}{INDENT}parsed = {b.adapter}.validate_json(resp.content)")
+    lines.append(f"{indent}raise ApiError(resp.status_code, resp.content, dict(resp.headers), parsed)")
+    return lines
+
+
+def _render_detailed_response(m: AsyncMethod, indent: str) -> list[str]:
+    """Emit the never-raise dispatch for the detailed variant, returning Response[T]."""
+    lines: list[str] = []
+    parsed_type = m.parsed_union_type or "None"
+    lines.append(f"{indent}parsed: {parsed_type} = None")
+    bodied = [b for b in m.branches if b.adapter is not None]
+    for i, b in enumerate(bodied):
+        prefix = "if" if i == 0 else "elif"
+        if b.is_default:
+            kw = "else" if i > 0 else "if True"
+            lines.append(f"{indent}{kw}:")
+        else:
+            lines.append(f"{indent}{prefix} {b.matcher}:")
+        lines.append(f"{indent}{INDENT}parsed = {b.adapter}.validate_json(resp.content)")
+    lines.append(
+        f"{indent}return Response(status_code=resp.status_code, "
+        f"headers=dict(resp.headers), content=resp.content, parsed=parsed)",
+    )
+    return lines
+
+
+def _is_2xx_matcher(matcher: str) -> bool:
+    """Heuristic: does this matcher expression target a 2xx status?"""
+    if "200 <= resp.status_code < 300" in matcher:
+        return True
+    if "resp.status_code == " in matcher:
+        code = int(matcher.rsplit(" ", 1)[-1])
+        return 200 <= code < 300  # noqa: PLR2004
+    return False
 
 
 def _render_url_expr(template: str, path_params: list[tuple[str, str]]) -> str:

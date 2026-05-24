@@ -4,6 +4,7 @@ import httpx
 from pydantic import TypeAdapter
 
 from ..models import Thing
+from ..runtime import ApiError, Response
 
 _Adapter_Thing = TypeAdapter(Thing)
 
@@ -14,5 +15,19 @@ class ThingsClient:
 
     async def list_things(self) -> Thing:
         resp = await self._http.get("/things")
-        resp.raise_for_status()
-        return _Adapter_Thing.validate_json(resp.content)
+        if 200 <= resp.status_code < 300:
+            return _Adapter_Thing.validate_json(resp.content)
+        parsed: object | None = None
+        raise ApiError(resp.status_code, resp.content, dict(resp.headers), parsed)
+
+    async def list_things_detailed(self) -> Response[Thing | None]:
+        resp = await self._http.get("/things")
+        parsed: Thing | None = None
+        if 200 <= resp.status_code < 300:
+            parsed = _Adapter_Thing.validate_json(resp.content)
+        return Response(
+            status_code=resp.status_code,
+            headers=dict(resp.headers),
+            content=resp.content,
+            parsed=parsed,
+        )

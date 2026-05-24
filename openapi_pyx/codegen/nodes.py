@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+Variant = Literal["simple", "detailed"]
+
 
 @dataclass(frozen=True, slots=True)
 class TypeExpr:
@@ -68,6 +70,16 @@ class Param:
 
 
 @dataclass(frozen=True, slots=True)
+class ResponseBranch:
+    """One status-code → schema branch for runtime dispatch in generated method bodies."""
+
+    matcher: str  # Python expression over `resp.status_code`, e.g. `resp.status_code == 200`
+    adapter: str | None  # `_Adapter_X` name, or None when the branch has no documented body
+    type_expr: str | None  # rendered Python type for the parsed value, or None when no body
+    is_default: bool = False  # True for the spec's `default` fallback (rendered as `else`)
+
+
+@dataclass(frozen=True, slots=True)
 class AsyncMethod:
     name: str
     params: list[Param]
@@ -80,7 +92,10 @@ class AsyncMethod:
     body_param: str | None  # python local name of the body parameter (or None)
     body_required: bool  # whether body is required (always True if body_param is None)
     body_type: TypeExpr | None  # type used to construct a `TypeAdapter` for serialization
-    response_type: TypeExpr | None  # type used to construct a `TypeAdapter` and validate
+    response_type: TypeExpr | None  # 2xx body type (for the simple variant's TypeAdapter + return)
+    variant: Variant = "simple"
+    branches: list[ResponseBranch] = field(default_factory=list)
+    parsed_union_type: str | None = None  # union of all branch types | None, for the detailed variant
     docstring: str | None = None
 
 

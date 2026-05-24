@@ -39,6 +39,14 @@ class Response:
 
 
 @dataclass(frozen=True, slots=True)
+class ResponseBranch:
+    """One documented status-code → schema mapping. `schema` is None for responses without a body."""
+
+    status_code: str  # exact ("200"), wildcard ("2XX", "4XX"), or "default"
+    schema: Schema | None
+
+
+@dataclass(frozen=True, slots=True)
 class Operation:
     operation_id: str
     http_method: str  # "get", "post", "put", "patch", "delete"
@@ -47,4 +55,5 @@ class Operation:
     description: str | None
     parameters: list[Parameter]
     request_body: RequestBody | None
-    response: Response | None  # None when no 2xx body or only no-content responses
+    response: Response | None  # The 2xx body returned by the simple variant. None means no documented 2xx body.
+    branches: list[ResponseBranch] = field(default_factory=list)  # All documented responses for the detailed variant.

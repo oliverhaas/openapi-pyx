@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
+import urllib.parse
 from pathlib import Path  # noqa: TC003
 from typing import Any
 
@@ -31,7 +33,8 @@ def load_normalized_raw(path: Path) -> dict[str, Any]:
 
     3.0 specs go through a typed conversion (parse as `v3_0.OpenAPI`, walk and convert
     each Schema, emit as 3.1-shaped dict). Then a few orthogonal raw-dict workarounds
-    run regardless of input version: YAML int response keys are stringified, ref-only
+    run regardless of input version: YAML int response keys are stringified, vendor
+    extensions (`x-*`) are dropped, cross-path `$ref` pointers are inlined, ref-only
     schema aliases are inlined, `pattern` fields that pydantic-core can't compile are
     dropped, OpenAPI Examples Objects (the named-map kind) are stripped. The returned
     dict is also fed to `datamodel-codegen` so it sees the same normalizations as our
@@ -58,13 +61,30 @@ def load_normalized_raw(path: Path) -> dict[str, Any]:
     elif not version.startswith("3.1"):
         raise LoadError(f"Only OpenAPI 3.0 and 3.1 are supported; got openapi={version!r}")
 
+    _strip_vendor_extensions(raw)
     _strip_example_refs(raw)
+    _inline_unsupported_refs(raw)
     _inline_schema_aliases(raw)
     _strip_unsupported_patterns(raw)
     components = raw.get("components")
     if isinstance(components, dict):
         components.pop("examples", None)
     return raw
+
+
+def _strip_vendor_extensions(node: Any) -> None:  # noqa: ANN401
+    """Recursively drop `x-*` keys. They're documentation/tooling hints with no impact on
+    the generated client, and Scayle has `$ref`s pointing inside `x-codeSamples` strings
+    that our `#/components/...`-only resolver can't validate.
+    """
+    if isinstance(node, dict):
+        for key in [k for k in node if isinstance(k, str) and k.startswith("x-")]:
+            node.pop(key)
+        for v in node.values():
+            _strip_vendor_extensions(v)
+    elif isinstance(node, list):
+        for item in node:
+            _strip_vendor_extensions(item)
 
 
 def _stringify_response_keys(node: Any) -> None:  # noqa: ANN401
@@ -78,6 +98,72 @@ def _stringify_response_keys(node: Any) -> None:  # noqa: ANN401
     elif isinstance(node, list):
         for item in node:
             _stringify_response_keys(item)
+
+
+_CANONICAL_REF_PREFIXES = (
+    "#/components/schemas/",
+    "#/components/parameters/",
+    "#/components/requestBodies/",
+    "#/components/responses/",
+    "#/components/headers/",
+)
+
+
+_MAX_INLINE_DEPTH = 16
+
+
+def _is_canonical_ref(ref: str) -> bool:
+    """A canonical ref is one of our supported component sections plus a single name segment."""
+    return any(ref.startswith(prefix) and "/" not in ref.removeprefix(prefix) for prefix in _CANONICAL_REF_PREFIXES)
+
+
+def _inline_unsupported_refs(raw: dict[str, Any]) -> None:
+    """Inline any `$ref` that doesn't point at a canonical top-level component.
+
+    Real-world 3.0 specs (Scayle) use cross-path refs (`#/paths/...`) to dedup
+    boilerplate responses/parameters, and deep JSON Pointers into `components.schemas`
+    (`#/components/schemas/<Name>/properties/<x>/allOf/0`) to share inline sub-schemas.
+    Our resolver only supports single-segment component refs, so we resolve and inline
+    everything else at load time.
+    """
+    _walk_inline_refs(raw, raw, depth=0)
+
+
+def _walk_inline_refs(root: dict[str, Any], node: Any, *, depth: int) -> None:  # noqa: ANN401
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and not _is_canonical_ref(ref) and depth < _MAX_INLINE_DEPTH:
+            target = _resolve_json_pointer(root, ref)
+            if isinstance(target, dict):
+                node.clear()
+                node.update(copy.deepcopy(target))
+                _walk_inline_refs(root, node, depth=depth + 1)
+                return
+        for v in node.values():
+            _walk_inline_refs(root, v, depth=depth)
+    elif isinstance(node, list):
+        for item in node:
+            _walk_inline_refs(root, item, depth=depth)
+
+
+def _resolve_json_pointer(root: dict[str, Any], pointer: str) -> Any:  # noqa: ANN401
+    """Resolve an RFC 6901 JSON Pointer (with URL-encoded path segments) against `root`.
+
+    Returns `None` if any segment doesn't resolve; callers leave the original `$ref`
+    in place so downstream validation surfaces a clearer error.
+    """
+    if not pointer.startswith("#/"):
+        return None
+    cur: Any = root
+    for raw_part in pointer[2:].split("/"):
+        part = urllib.parse.unquote(raw_part).replace("~1", "/").replace("~0", "~")
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        elif isinstance(cur, list) and part.isdigit() and 0 <= int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            return None
+    return cur
 
 
 _COMPONENT_SCHEMA_PREFIX = "#/components/schemas/"
@@ -154,18 +240,33 @@ def _strip_example_refs(node: Any) -> None:  # noqa: ANN401
     OpenAPI's Examples Object is a `{name: ExampleObject|$ref}` map pointing
     at `#/components/examples/...`, which we don't resolve. The
     `components.examples` section is the ref target pool, so drop that too.
+
+    We also drop `example` / `examples` whose values transitively reference
+    `#/components/examples/...`. Scayle nests these as `example: {<name>: {$ref: ...}}`,
+    which is not standard OpenAPI but appears in real specs.
     """
     if isinstance(node, dict):
         # OpenAPI Examples Object: dict-shaped `examples`. JSON Schema: list-shaped.
         if isinstance(node.get("examples"), dict):
             node.pop("examples", None)
-        # GitHub's spec uses `example: {$ref: "#/components/examples/..."}` in places.
-        # That's a ref disguised as a literal; drop it.
-        example_value = node.get("example")
-        if isinstance(example_value, dict) and "$ref" in example_value:
+        # GitHub uses `example: {$ref: "#/components/examples/..."}`; Scayle nests one
+        # level deeper as `example: {<name>: {$ref: ...}}`. Either way the field is
+        # informational and would dangle after we drop `components.examples`.
+        if _has_components_example_ref(node.get("example")):
             node.pop("example", None)
         for v in node.values():
             _strip_example_refs(v)
     elif isinstance(node, list):
         for item in node:
             _strip_example_refs(item)
+
+
+def _has_components_example_ref(value: Any) -> bool:  # noqa: ANN401
+    if isinstance(value, dict):
+        ref = value.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/components/examples/"):
+            return True
+        return any(_has_components_example_ref(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_components_example_ref(v) for v in value)
+    return False

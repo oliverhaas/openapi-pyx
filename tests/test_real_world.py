@@ -38,6 +38,9 @@ EXPECTED_GITHUB_MIN_SUB_CLIENTS = 40
 ASANA_SPEC_URL = "https://raw.githubusercontent.com/asana/openapi/master/defs/asana_oas.yaml"
 EXPECTED_ASANA_MIN_SUB_CLIENTS = 40
 
+SCAYLE_SPEC_URL = "https://scayle.dev/en/api-guides/admin-api/.gitbook/assets/admin-api-latest.json"
+EXPECTED_SCAYLE_MIN_SUB_CLIENTS = 40
+
 
 def _load_package(tmp_path: Path, spec: Path, package_name: str) -> ModuleType:
     out = tmp_path / package_name
@@ -319,3 +322,29 @@ def test_asana_3_0_spec_generates_and_imports(tmp_path: Path):
 
     sync_client = pkg.SyncClient(base_url="https://app.asana.com/api/1.0")
     assert len([a for a in dir(sync_client) if not a.startswith("_")]) >= EXPECTED_ASANA_MIN_SUB_CLIENTS
+
+
+@pytest.mark.skipif(
+    os.environ.get("OPENAPI_PYX_TEST_SCAYLE") != "1",
+    reason="Set OPENAPI_PYX_TEST_SCAYLE=1 to enable; downloads the ~2 MB Scayle Admin API 3.0 spec.",
+)
+def test_scayle_admin_api_3_0_spec_generates_and_imports(tmp_path: Path):
+    """End-to-end against the Scayle Admin API (OpenAPI 3.0.3).
+
+    Scayle exercises cross-path `$ref`s (response/parameter dedup), deep JSON-Pointer
+    refs into `components.schemas`, dict-shaped `example` fields with refs to
+    `#/components/examples/`, and 300+ vendor extensions (x-codeSamples, x-bulkRequest).
+    """
+    spec_path = tmp_path / "scayle-admin.json"
+    # GitBook returns 403 to urllib's default UA; pretend to be a regular browser.
+    req = urllib.request.Request(SCAYLE_SPEC_URL, headers={"User-Agent": "Mozilla/5.0"})  # noqa: S310
+    with urllib.request.urlopen(req) as resp:  # noqa: S310
+        spec_path.write_bytes(resp.read())
+
+    pkg = _load_package(tmp_path, spec_path, "scayle_client_e2e")
+    client = pkg.Client(base_url="https://example.scayle.cloud")
+    sub_clients = [a for a in dir(client) if not a.startswith("_")]
+    assert len(sub_clients) >= EXPECTED_SCAYLE_MIN_SUB_CLIENTS
+
+    sync_client = pkg.SyncClient(base_url="https://example.scayle.cloud")
+    assert len([a for a in dir(sync_client) if not a.startswith("_")]) >= EXPECTED_SCAYLE_MIN_SUB_CLIENTS

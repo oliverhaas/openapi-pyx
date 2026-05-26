@@ -1,9 +1,7 @@
 from pathlib import Path
 
-import pytest
-
 from openapi_pyx.ingest.loader import load_spec
-from openapi_pyx.transform.resolver import ResolveError, build_schema_index
+from openapi_pyx.transform.resolver import build_schema_index
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -50,21 +48,31 @@ def test_inlines_top_level_ref_alias_in_components(tmp_path):
     assert index.schemas["Alias"].properties == index.schemas["Real"].properties
 
 
-def test_rejects_non_components_ref(tmp_path):
-    p = tmp_path / "bad.yaml"
+def test_inlines_cross_path_ref(tmp_path):
+    """Cross-path `$ref`s (e.g. Scayle's response dedup) are inlined at load time."""
+    p = tmp_path / "cross-path.yaml"
     p.write_text(
         "openapi: 3.1.0\n"
         "info: { title: x, version: '1' }\n"
         "paths:\n"
-        "  /x:\n"
+        "  /a:\n"
         "    get:\n"
         "      responses:\n"
         '        "200":\n'
-        "          description: y\n"
+        "          description: ok\n"
         "          content:\n"
         "            application/json:\n"
-        '              schema: { $ref: "#/paths/~1x/get" }\n',
+        "              schema: { type: object, properties: { id: { type: integer } } }\n"
+        "  /b:\n"
+        "    get:\n"
+        "      responses:\n"
+        '        "200":\n'
+        "          description: ok\n"
+        "          content:\n"
+        "            application/json:\n"
+        '              schema: { $ref: "#/paths/~1a/get/responses/200/content/application~1json/schema" }\n',
     )
     spec = load_spec(p)
-    with pytest.raises(ResolveError, match="components/schemas"):
-        build_schema_index(spec)
+    b_schema = spec.paths["/b"].get.responses["200"].content["application/json"].media_type_schema
+    assert b_schema.type == "object"
+    assert "id" in (b_schema.properties or {})

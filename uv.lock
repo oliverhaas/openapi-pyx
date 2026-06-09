@@ -143,21 +143,21 @@ wheels = [
 
 [[package]]
 name = "datamodel-code-generator"
-version = "0.58.0"
+version = "0.61.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "argcomplete" },
-    { name = "black" },
+    { name = "black", marker = "sys_platform != 'emscripten'" },
     { name = "genson" },
     { name = "inflect" },
-    { name = "isort" },
+    { name = "isort", marker = "sys_platform != 'emscripten'" },
     { name = "jinja2" },
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d4/7f/0e838be05fb64a088730bf5a3a510f4260e43ea9fbcea8b86d97aa31ca80/datamodel_code_generator-0.58.0.tar.gz", hash = "sha256:14b157b26ca85b8dfc2fdf2ada242f003937a130375892003067a4fdf046021c", size = 986860, upload-time = "2026-05-25T03:23:53.113Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2b/df/b2e7c15387d309bb7474dc4dbea96e624cfc42c1076e33abaed2d9164892/datamodel_code_generator-0.61.0.tar.gz", hash = "sha256:42d1b530bfa80d18a7bbfd2a24c21e53cb99a2dd4ef9d29f966a434d859c89c7", size = 1149717, upload-time = "2026-06-08T18:01:02.302Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/f6/992262b2f7845885899a6b57ff81f97f8506d443a20b7244ee8ea85247d8/datamodel_code_generator-0.58.0-py3-none-any.whl", hash = "sha256:73c4feb12bf773e280eb721b7968a5d5dbb953be2a700bf70995ba442abd0a57", size = 274532, upload-time = "2026-05-25T03:23:51.027Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/19/82582eae8ccd00ab76cb942d4a08f710c9044bbb1fe3dded804cc9a1208c/datamodel_code_generator-0.61.0-py3-none-any.whl", hash = "sha256:2c0ddcf5203c182e533c3567836ab5131d4b2ae4c8698419a59de3063e3cb447", size = 340657, upload-time = "2026-06-08T18:01:00.565Z" },
 ]
 
 [[package]]
@@ -433,13 +433,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "datamodel-code-generator", specifier = ">=0.58.0" },
+    { name = "datamodel-code-generator", specifier = ">=0.61.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "openapi-pydantic", specifier = ">=0.5.1" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.13.4" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.15.15" },
-    { name = "typer", specifier = ">=0.15" },
+    { name = "typer", specifier = ">=0.26.7" },
 ]
 
 [package.metadata.requires-dev]
@@ -774,17 +774,17 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.25.1"
+version = "0.26.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "click" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e4/51/9aed62104cea109b820bbd6c14245af756112017d309da813ef107d42e7e/typer-0.25.1.tar.gz", hash = "sha256:9616eb8853a09ffeabab1698952f33c6f29ffdbceb4eaeecf571880e8d7664cc", size = 122276, upload-time = "2026-04-30T19:32:16.964Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/ed/ef06584ccdd5c410df0837951ecd7e15d9a6144ea1bd4c73cecab1a89891/typer-0.26.7.tar.gz", hash = "sha256:e314a34c617e419c091b2830dda3ea1f257134ff593061a8f5b9717ab8dddb3a", size = 201709, upload-time = "2026-06-03T07:18:06.843Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/f9/2b3ff4e56e5fa7debfaf9eb135d0da96f3e9a1d5b27222223c7296336e5f/typer-0.25.1-py3-none-any.whl", hash = "sha256:75caa44ed46a03fb2dab8808753ffacdbfea88495e74c85a28c5eefcf5f39c89", size = 58409, upload-time = "2026-04-30T19:32:18.271Z" },
+    { url = "https://files.pythonhosted.org/packages/24/25/2201973529af2c954de0bb725323c3aaed6d7f0ceee8f550dec9185df013/typer-0.26.7-py3-none-any.whl", hash = "sha256:5c87cfbc5d34491c5346ebf49c23e18d56ccb863268d3a8d592b26087c2f5e58", size = 122456, upload-time = "2026-06-03T07:18:05.732Z" },
 ]
 
 [[package]]

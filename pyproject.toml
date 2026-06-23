@@ -28,7 +28,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  "datamodel-code-generator>=0.64.0",
+  "datamodel-code-generator>=0.65.0",
   "httpx>=0.28",
   "openapi-pydantic>=0.5.1",
   "pydantic[email]>=2.13.4",

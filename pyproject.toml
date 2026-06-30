@@ -33,7 +33,7 @@ dependencies = [
   "openapi-pydantic>=0.5.1",
   "pydantic[email]>=2.13.4",
   "PyYAML>=6",
-  "ruff>=0.15.18",
+  "ruff>=0.15.20",
   "typer>=0.26.7",
 ]
 
@@ -51,8 +51,8 @@ dev = [
   "pytest-asyncio==1.4.0",
   "pytest-cov==7.1.0",
   "pytest-xdist==3.8.0",
-  "ruff==0.15.18",
-  "ty==0.0.52",
+  "ruff==0.15.20",
+  "ty==0.0.55",
 ]
 
 [build-system]

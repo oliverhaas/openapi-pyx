@@ -33,7 +33,7 @@ dependencies = [
   "openapi-pydantic>=0.5.1",
   "pydantic[email]>=2.13.4",
   "PyYAML>=6",
-  "ruff>=0.15.22",
+  "ruff>=0.16.1",
   "typer>=0.27.0",
 ]
 
@@ -46,13 +46,13 @@ openapi-pyx = "openapi_pyx.cli:app"
 
 [dependency-groups]
 dev = [
-  "pre-commit==4.6.0",
+  "pre-commit==4.6.1",
   "pytest==9.1.1",
   "pytest-asyncio==1.4.0",
   "pytest-cov==7.1.0",
   "pytest-xdist==3.8.0",
-  "ruff==0.15.22",
-  "ty==0.0.61",
+  "ruff==0.16.1",
+  "ty==0.0.65",
 ]
 
 [build-system]

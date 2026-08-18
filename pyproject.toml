@@ -28,13 +28,13 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  "datamodel-code-generator>=0.71.0",
+  "datamodel-code-generator>=0.73.0",
   "httpx>=0.28",
   "openapi-pydantic>=0.5.1",
   "pydantic[email]>=2.13.4",
   "PyYAML>=6",
   "ruff>=0.16.2",
-  "typer>=0.27.0",
+  "typer>=0.27.1",
 ]
 
 [project.urls]
